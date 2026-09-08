@@ -28,6 +28,24 @@
 
 ## 1. El malentendido que hay que sacar de encima
 
+> ## ⚠ En revisión por el V4 del Grupo 5 (8‑sep‑2026)
+>
+> **El outbox no se mueve.** Todo §3 —el patrón, la tabla, el relay, la entrega *at least once*—
+> sigue siendo fuente de verdad, y §1, §2, §4, §6 y §7 también.
+>
+> Dos cosas quedan pendientes:
+>
+> - **§5, el contrato que expone.** Le falta una familia de endpoints entera: el **CRUD de perfiles**
+>   con versionado inmutable (`POST` crea versión nueva, `PUT` se rechaza), ciclo
+>   `BORRADOR → VALIDADA → ACTIVA → DEPRECADA`, smoke test automático al registrar y autenticación
+>   servicio a servicio. Es trabajo nuevo de tamaño mediano, y **espera la confirmación de la
+>   Opción 1** (**D17**). Está especificado en [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §8.
+> - **§3.4, a dónde publica el relay.** Acá dice **RabbitMQ**, que es nuestra cola de trabajo interna
+>   (`04` §3). El resultado de una ejecución, en cambio, tiene que salir al **bus de la plataforma**
+>   —Kafka, del grupo de notificaciones— como evento `EjecucionFinalizada` con el resumen y no el
+>   detalle. Las dos cosas conviven, pero **cómo se articulan no está resuelto**: es **D20**, y se
+>   cierra cuando tengamos el panorama completo de eventos de la plataforma.
+
 La primera reacción de cualquiera que mira la arquitectura es la misma:
 
 > *"¿Y la API qué hace? Si no ejecuta nada, no toca Docker, no compila, no evalúa… ¿no es un
