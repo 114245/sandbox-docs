@@ -12,6 +12,24 @@
 
 ## 1. Qué construimos
 
+> ## ⚠ Una parte de esta propuesta cambió (8‑sep‑2026)
+>
+> Después de escribir esto acordamos con el Grupo 5 el **modelo de dos capas**: adentro del
+> contenedor corren dos programas, nuestro entrypoint y un script de evaluación que escriben ellos.
+> El servicio deja de saber Java y pasa a ser **infraestructura agnóstica de lenguaje**.
+>
+> Lo que eso cambia acá: **§2, el contrato con T05**, está superado —el request pierde el lenguaje,
+> los roles y la visibilidad por archivo, y gana un `profileId`—; **§8** menciona la regla de que
+> el veredicto sale del XML de JUnit, que se sostiene como principio pero cambia de lugar (**D16**);
+> y **§10** quedó corto, porque aparecieron seis decisiones nuevas y una familia de endpoints.
+>
+> **§4, §5, §6, §7 y §11 no se mueven** — el aislamiento, el hallazgo que reordenó el diseño, las
+> mediciones y la regla que atraviesa todo siguen siendo exactamente lo que eran. De hecho ganan
+> peso: pasan a ser casi lo único que aportamos al veredicto.
+>
+> El panorama completo está en [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md), y el estado de
+> decisiones actualizado en el [`README.md`](./README.md) §3.
+
 > **Un servicio que ejecuta código no confiable, escrito por un alumno, junto a pruebas escritas
 > por un profesor, en un entorno del que ese código no puede escapar ni al que puede hacer daño,
 > y que devuelve un veredicto confiable en el que se puede fundar una nota.**

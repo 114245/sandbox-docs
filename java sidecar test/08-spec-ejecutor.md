@@ -9,6 +9,19 @@
 
 ## 0. Cambios desde la primera versión
 
+> ## ⚠ En revisión por el V4 del Grupo 5 (8‑sep‑2026)
+>
+> **Esta es una copia de trabajo.** La fuente de verdad es
+> [`docs/arquitectura/08-spec-ejecutor.md`](../docs/arquitectura/08-spec-ejecutor.md), y ahí está el
+> aviso completo.
+>
+> El resumen: **el ejecutor es transporte, no lenguaje**, así que el socket, el contrato HTTP, el
+> demultiplexado, el nonce, los timeouts, la concurrencia y los invariantes de seguridad no los
+> toca nada — esta implementación sigue siendo válida. Lo que queda en revisión son las constantes
+> de §4 (imagen y límites pasan a salir del perfil), el sobre de §5, la validación del tar de §7 y
+> los criterios de §13. Ver
+> [`11-impacto-v4-g5.md`](../docs/arquitectura/11-impacto-v4-g5.md) §10 y §11.
+
 > **Leer esto primero.** La implementación en Java se construyó contra la versión anterior de este documento y **no** cubre lo de abajo. Las dos implementaciones tienen que quedar alineadas con esta versión.
 
 | # | Cambio | Dónde | Impacto |
