@@ -10,6 +10,10 @@
 > **Estado: propuesta cerrada, a confirmar por el equipo.** El §9 dice exactamente qué hay que
 > confirmar y qué se rompe si no se confirma.
 >
+> **La premisa está verificada contra la imagen real** (§8): se neutralizó la guarda de la tapa y
+> `hostil-exit0` siguió mandando afuera el XML con `tests="0"`, que es lo que el worker necesita
+> para dictar `SALIDA_ANTICIPADA` por su cuenta. El control con `ok-suma` manda `tests="3"`.
+>
 > Escrito el **8 de septiembre de 2026**.
 
 ---
@@ -23,7 +27,7 @@
 5. [El caso que rompe todo si no se decide: fail-closed](#5-el-caso-que-rompe-todo-si-no-se-decide-fail-closed)
 6. [Qué reemplaza a `testsEnReporte`](#6-qué-reemplaza-a-testsenreporte)
 7. [Lo que hay que corregir en otros documentos](#7-lo-que-hay-que-corregir-en-otros-documentos)
-8. [Cómo se prueba](#8-cómo-se-prueba)
+8. [Cómo se prueba — y el resultado](#8-cómo-se-prueba--y-el-resultado)
 9. [Qué hay que confirmar y qué queda abierto](#9-qué-hay-que-confirmar-y-qué-queda-abierto)
 
 ---
@@ -152,8 +156,11 @@ VerificadorDeEvidencia
   verificar(reportes) -> Evidencia { corridas: int, fallidas: int, legible: bool }
 ```
 
-- **`junit-xml`** es el primero, y es el que ya está escrito: suma `tests` y `failures`+`errors` de
-  los XML del buzón. No es código nuevo — es el que existe, movido detrás de la interfaz.
+- **`junit-xml`** es el primero, y es el que ya está escrito: **suma** `tests` y `failures`+`errors`
+  **a través de todos los XML del buzón**. No es código nuevo — es el que existe, movido detrás de
+  la interfaz. La palabra *suma* no es decorativa: `ok-suma` deja **tres** XML y **dos tienen
+  `tests="0"`**, así que un verificador que mirara archivo por archivo rechazaría el camino feliz.
+  Está medido en §8.3.
 - **`pmd-xml`, `archunit-xml`, …** se agregan cuando haga falta, sin tocar imágenes ni el
   entrypoint. Esto es lo que compramos con la decisión.
 - **`legible: false`** es el caso importante, y lo trata el §5.
@@ -280,26 +287,90 @@ Con la fecha, el documento donde vive, y la nota de que **desbloquea P9**.
 
 ---
 
-## 8. Cómo se prueba
+## 8. Cómo se prueba — y el resultado
 
-La prueba de que la decisión es correcta ya existe y no hay que inventarla: es
-`bundles/hostil-exit0`, el caso que dio origen a D6.
+> **Corrido el 8‑sep‑2026 contra `sandbox-runner:1.0.0` y Docker 29.7.2. La premisa del §1 quedó
+> confirmada.** Lo que sigue documenta el test, el ajuste que hubo que hacerle y los números.
 
-| Paso | Qué se hace | Qué tiene que pasar |
-|---|---|---|
-| 1 | Correr `hostil-exit0` **hoy**, sin tocar nada | Veredicto `SALIDA_ANTICIPADA`. Es la línea de base |
-| 2 | Sacar del entrypoint el conteo y el `morir` de la guarda 3, **sin tocar el worker** | **El veredicto tiene que seguir siendo `SALIDA_ANTICIPADA`.** Si cambia, la premisa del §1 es falsa: el worker no estaba verificando de verdad, y D16 sí era una mudanza |
-| 3 | Meter el verificador detrás de la interfaz, con `junit-xml` | Idéntico al paso 2 |
-| 4 | Registrar un perfil con `reportFormat` desconocido y correr `ok-suma` | `ERROR_INTERNO`, **no** `EXITO`, y **no consume intento** (§5) |
-| 5 | Pasar ese mismo perfil por el smoke test | **No llega a `VALIDADA`** |
+### 8.1 El test tal como estaba escrito no se podía correr
 
-> **El paso 2 es el que vale.** Es una verificación barata —sacar tres líneas y correr un bundle— que
-> confirma o refuta de un saque toda la premisa de este documento. **Conviene correrlo antes de
-> escribir una línea del refactor**, porque si el veredicto cambia, D16 vuelve a ser una mudanza de
-> guarda de seguridad y hay que tratarla con el cuidado que eso merece.
+La primera versión de esta sección decía: *"sacar la guarda 3 del entrypoint y verificar que el
+veredicto sigue siendo `SALIDA_ANTICIPADA`"*. **Eso no se puede observar: el worker todavía no
+existe como código.** El repositorio tiene la imagen del runner y las dos implementaciones del
+ejecutor —que por R3.1 tienen prohibido decidir veredictos— y nada más. El worker, por ahora, es
+documentación.
 
-Los pasos 4 y 5 son casos nuevos y hay que escribirlos: hoy no existe ningún test que cubra un perfil
-roto, porque todavía no existen los perfiles.
+El test se reformuló para medir la misma propiedad sin la pieza que falta:
+
+> **¿Le llega al worker, en el sobre y sin la guarda de la tapa, la evidencia suficiente para
+> derivar `SALIDA_ANTICIPADA` por su cuenta?**
+
+Si el XML con `tests="0"` viaja igual, la respuesta es sí y la premisa se sostiene. Si el reporte
+llegara ausente o vacío, D16 volvería a ser una mudanza de guarda de seguridad.
+
+El arnés es `sandbox/runner/run.sh`, que es justamente *"lo que después va a hacer el worker, a
+mano"*. Se neutralizó **sólo la decisión** de la guarda 3 —el `morir`— y se dejó el conteo en el
+sobre, para poder comparar el número.
+
+> **Ojo con el nombre.** Ese `run.sh` es el arnés de prueba nuestro, y no tiene nada que ver con el
+> `run.sh` del sándwich, que es el script de evaluación del Grupo 5. La colisión de nombres es
+> desafortunada y conviene renombrar el arnés cuando se toque P9.
+
+### 8.2 Los números
+
+| | `hostil-exit0` **hoy** | `hostil-exit0` **sin guarda 3** | `ok-suma` **sin guarda 3** |
+|---|---|---|---|
+| exit del contenedor | **29** | **0** | 0 |
+| `resultado` del sobre | `SALIDA_ANTICIPADA` | **`OK`** | `OK` |
+| `testsEnReporte` | 0 | 0 | 3 |
+| ¿viaja el reporte? | sí | **sí** | sí |
+| XML en el buzón | `TEST-junit-platform-suite.xml` | **idéntico** | 3 archivos |
+| `tests=` en el XML | `0` | **`0`** | `3`, `0`, `0` |
+
+**La columna del medio es el resultado.** Sin la guarda, la tapa informa `OK` y sale `0` para una
+entrega que no corrió una sola prueba —que es exactamente el bypass de `System.exit(0)`— **pero el
+XML con `tests="0"` viaja igual adentro del sobre.** El worker tiene todo lo que necesita.
+
+Y la tercera columna es el control que le da sentido: con la misma imagen sin guarda, `ok-suma`
+manda `tests="3"`. Las dos entregas llegan afuera con `resultado: OK` y exit `0`, **y lo único que
+las distingue es el contenido del reporte.** Que es precisamente lo que dice la decisión: el
+veredicto sale del reporte.
+
+### 8.3 Un hallazgo del control, y es una trampa para quien implemente
+
+`ok-suma` no deja un XML: deja **tres**, uno por engine de JUnit, y **dos de ellos tienen
+`tests="0"`**.
+
+> Un verificador que aplicara *"si algún archivo dice `tests="0"`, no hay evidencia"` **rompería el
+> camino feliz**. La regla correcta es **sumar el atributo a través de todos los archivos del
+> buzón**, que es lo que hace hoy el `awk` del entrypoint y lo que `04` §6 le atribuye al worker.
+
+Con la suma, los dos casos quedan bien separados: `hostil-exit0` suma **0** y `ok-suma` suma **3**.
+Va como requisito explícito del `VerificadorDeEvidencia` de `junit-xml`, porque es la clase de
+detalle que no se descubre leyendo la spec y sí rompiendo el build.
+
+### 8.4 Lo que falta probar
+
+Los pasos 4 y 5 —perfil con `reportFormat` desconocido ⇒ `ERROR_INTERNO`, y ese perfil no llega a
+`VALIDADA`— **no se pudieron correr y no es un olvido**: no existen todavía ni los perfiles ni el
+worker. Quedan como criterio de aceptación de ese trabajo, y hay que escribirlos junto con él.
+
+### 8.5 Reproducirlo
+
+```sh
+cd sandbox/runner
+./run.sh bundles/hostil-exit0                    # línea de base: exit 29, SALIDA_ANTICIPADA
+
+git checkout -b experimento/d16                  # neutralizar el 'morir' de la guarda 3
+IMAGEN=sandbox-runner:d16-exp ./build.sh
+IMAGEN=sandbox-runner:d16-exp ./run.sh bundles/hostil-exit0   # exit 0, OK, y el XML igual viaja
+IMAGEN=sandbox-runner:d16-exp ./run.sh bundles/ok-suma        # control
+
+git checkout main && docker rmi sandbox-runner:d16-exp
+```
+
+El `reportesTarGzB64` del sobre se abre con `base64 -d | tar -xzf -`. Sin `jq` instalado, el propio
+`run.sh` imprime el JSON crudo.
 
 ---
 
@@ -310,7 +381,7 @@ implementación:
 
 | # | Qué se confirma | Qué pasa si se decide al revés |
 |---|---|---|
-| 1 | **La verificación fina vive sólo en el worker** (Opción C), y la tapa se queda con las guardas agnósticas | Con A, cada formato nuevo pasa a requerir una imagen nueva. Con B, se pierde la propiedad entera |
+| 1 | **La verificación fina vive sólo en el worker** (Opción C), y la tapa se queda con las guardas agnósticas. **Verificado en §8:** sin la guarda de la tapa, la evidencia llega igual | Con A, cada formato nuevo pasa a requerir una imagen nueva. Con B, se pierde la propiedad entera |
 | 2 | **Fail-closed:** formato desconocido o reporte ilegible ⇒ `ERROR_INTERNO`, nunca `EXITO`, y no consume intento | Es el único que **no** admite otra respuesta: la alternativa reintroduce el bug de `System.exit(0)` por omisión |
 | 3 | **El criterio de aceptación de P9 se mide en veredictos, no en códigos de salida** (§7.2) | El refactor "falla" el test estando bien, y la reacción natural es dejar el conteo en la tapa "para que pase" |
 
