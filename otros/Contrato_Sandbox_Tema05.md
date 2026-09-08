@@ -1,6 +1,39 @@
 # Contrato de Invocación — Sandbox (Tema 06) ↔ Desafíos Prácticos (Tema 05)
 
-**Estado:** propuesta para discutir en reunión conjunta — no cerrado
+> # ⚠ DOCUMENTO OBSOLETO — no usar como contrato
+>
+> **Superado el 7 de septiembre de 2026** por el V4 del Grupo 5 y la respuesta que le mandamos.
+> Se conserva por trazabilidad: es el primer borrador del contrato, y sirve para entender de
+> dónde venimos. **No refleja lo acordado.**
+>
+> **Qué se cayó de acá:**
+>
+> | Esto de abajo | Por qué ya no vale |
+> |---|---|
+> | `language: "python"`, `language_version: "3.11"` | El sandbox dejó de saber de lenguajes. Lo define el **perfil**, y el primero es Java 21 |
+> | `source_code` como string único | Ahora viaja un **tar** con un árbol de archivos entero |
+> | `test_cases[]` con `stdin` / `expected_stdout` | No comparamos stdout. Los tests son **archivos** que corre la capa de evaluación de T05 |
+> | `entrypoint: "solucion.py"` | El entrypoint es **nuestro** y no es negociable; lo que T05 aporta es el script de evaluación (capa 2) |
+> | `limits` en el request | Se mudan al **perfil**, con presupuestos separados de compilación y evaluación |
+>
+> **Qué sobrevive** —y por eso este documento no se borra—:
+>
+> - **El modelo asincrónico** y su fundamento (la latencia de levantar un contenedor + los picos de
+>   ~120 usuarios simultáneos en cierres de curso). Se confirmó, y hoy es la **D20**: `202 Accepted`
+>   más el resultado por el bus de eventos.
+> - **La distinción entre error de infraestructura y falla del alumno**, y que el primero **no
+>   consume intento**. Sigue vigente, ahora la calcula T05 con lo que le damos nosotros.
+>
+> **Qué leer en su lugar:**
+>
+> - [`otros/Respuesta_G8_a_Propuesta_V4.md`](./Respuesta_G8_a_Propuesta_V4.md) — el contrato del
+>   contenedor completo (§2) y el modelo asincrónico (§6). Es lo que se le mandó a G5.
+> - [`docs/arquitectura/11-impacto-v4-g5.md`](../docs/arquitectura/11-impacto-v4-g5.md) §7.4 — el
+>   análisis de por qué este documento queda obsoleto.
+
+---
+
+**Estado:** ~~propuesta para discutir en reunión conjunta — no cerrado~~ **OBSOLETO** (ver arriba)
 **Tecnología del sandbox:** Docker (aislamiento por contenedor efímero)
 
 ---
