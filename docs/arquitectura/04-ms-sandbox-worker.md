@@ -266,6 +266,22 @@ Y hay que **cerrar el círculo**: al mandar el mensaje a la DLQ, la fila de `eje
 
 ## 6. Paso 1 — ejecutar
 
+> ## ⚠ Esta sección gana trabajo con el V4 (8‑sep‑2026)
+>
+> **El reparto de §6 se confirma y se refuerza**: el ejecutor devuelve materia prima, el worker
+> produce el veredicto. Bajo el modelo de dos capas eso se vuelve más cierto, no menos, porque el
+> contenedor deja de saber qué corrió adentro.
+>
+> Lo que cambia es que **el mapeo de abajo está cableado a JUnit**, y ya no puede estarlo. La
+> guarda que no se negocia —no hay `EXITO` sin `tests > 0` leído del XML de verdad— es la regla
+> **D6**, y hoy la aplica en parte el entrypoint. Bajo el sándwich la tapa no sabe leer un XML de
+> JUnit, porque no sabe que existe JUnit: **la verificación entera se muda acá**, indexada por el
+> `reportFormat` que declara el perfil (`junit-xml`, `pmd-xml`, …).
+>
+> Eso es **D16**, está abierta, no depende del Grupo 5 y **bloquea el refactor del entrypoint**
+> (P9). Es la decisión más urgente que tenemos. Ver
+> [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §6.
+
 El modelo mental que más ayuda:
 
 > **El worker nunca ejecuta el código del alumno. Ni lo lee, ni lo compila, ni lo carga. Y desde [D1](./README.md) tampoco le da órdenes a Docker: se las pide al ejecutor.**
