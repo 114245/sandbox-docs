@@ -4,11 +4,37 @@
 > Alcance de este documento: **cómo se ejecuta el código aislado**, **cómo llega la entrega desde T05**, **de dónde salen los tests** y **qué alternativas de recursos existen**.
 > Deliberadamente **fuera de alcance acá**: Gateway, Service Discovery y el resto de la arquitectura del curso (ver `01-panorama-microservicios-backend.md`).
 
+> ## ⚠ En revisión por el V4 del Grupo 5 (8‑sep‑2026)
+>
+> Este documento está escrito asumiendo que **el sandbox sabe Java**. Bajo el modelo de dos capas
+> que acordamos con el Grupo 5, no: compilar, testear y dictar el veredicto técnico son de la
+> **capa 2**, que escribe ellos y que para nosotros es opaca. Pasamos de *corredor de Java con
+> opinión* a **infraestructura agnóstica de lenguaje**.
+>
+> **Qué de este documento sigue siendo fuente de verdad:** §1 (aislamiento, las guardas, el bundle
+> por `stdin`), §2 (superficie de ataque), §3 y §4 (recursos y medición). Nada de eso lo toca el V4.
+>
+> **Qué está en revisión:**
+>
+> | Sección | Qué le pasa |
+> |---|---|
+> | **§5.1** máquina de estados | Se aplana. `TESTS_FALLIDOS`, `COMPILACION_FALLIDA` y `SUITE_INVALIDA` ya no los puede distinguir la tapa. Quedan los finales de infraestructura más "la capa 2 corrió y dijo X" |
+> | **§6.1** request | Se caen `lenguaje`, `archivos[].rol`, `archivos[].visibilidad`, `modo` y `trazabilidad.suiteVersion`. Los reemplaza un `profileId` versionado |
+> | **§6.2** response | Se cae entera: `resumen`, `tests[]`, `mensaje` y `visibilidad` por test. No parseamos el reporte — devolvemos lo que produjo la capa 2 |
+> | **§7** definiciones abiertas | Las **1, 2, 4, 5, 6, 14, 16 y 17** dejan de ser negociaciones nuestras: caen en dominio de T05 |
+>
+> **Dónde está lo vigente mientras tanto:** [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §7 (el
+> detalle de qué se cae) y [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md)
+> §2 (el contrato del contenedor, completo).
+>
+> **Por qué no está reescrito ya.** Porque la respuesta al V4 está mandada y sin contestar
+> (`11` §13.6): reescribirlo ahora sería escribirlo contra un contrato que todavía se mueve.
+
 **Supuestos vigentes**
 
 | Supuesto | Estado |
 |---|---|
-| Lenguaje soportado | **Java únicamente**, por ahora |
+| Lenguaje soportado | ~~**Java únicamente**, por ahora~~ → **en revisión**: el lenguaje deja de ser un supuesto del servicio y pasa a definirlo el perfil (ver aviso arriba) |
 | Grupo con el que se coordina | **Tema 05 — Desafíos Prácticos** |
 | Arquitectura de plataforma | Definida por la cátedra: gateway como única entrada, sin comunicación directa entre servicios, base por servicio, bus para lo asincrónico. Ver [`01-panorama-microservicios-backend.md`](./01-panorama-microservicios-backend.md) §1 |
 | Núcleo de ejecución | **Verificado contra Docker real** con 10 entregas de prueba. Lo medido está en §1.4 |
@@ -547,6 +573,11 @@ El número se ajusta con la prueba de carga; el mecanismo tiene que estar bien d
 
 ## 5. Máquina de estados de una ejecución
 
+> **⚠ §5.1 se aplana con el V4.** Los tres estados que dependen de saber Java —`TESTS_FALLIDOS`,
+> `COMPILACION_FALLIDA` y `SUITE_INVALIDA`— la tapa ya no los puede distinguir. La distinción fina
+> vuelve por dos vías nuevas: la **banda de códigos de salida `40–59`** que define T05, y el
+> archivo `$SANDBOX_STATUS/fase`. Ver [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §7.3.
+
 ```
         POST /ejecuciones
                │
@@ -610,6 +641,13 @@ Y el reintento tiene tope: al agotarlo, el mensaje va a la **DLQ** y la fila que
 ---
 
 ## 6. Contrato completo de API
+
+> **⚠ Este contrato está superado por el V4.** El request pierde `lenguaje`, `archivos[].rol`,
+> `archivos[].visibilidad`, `modo` y `trazabilidad.suiteVersion`; la respuesta de §6.2 se cae
+> entera, porque dejamos de parsear el reporte. Lo que hoy vale está en
+> [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §7.2 y §8, y el contrato del contenedor en
+> [`Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) §2. **Se reescribe
+> cuando G5 conteste, no antes.**
 
 Prefijo: `/api/v1/sandbox`
 
@@ -762,6 +800,14 @@ El evento lleva el **resumen**, no el detalle. Quien necesite el detalle hace el
 ---
 
 ## 7. Definiciones abiertas con T05
+
+> **⚠ Ocho de estas dejaron de ser nuestras.** Bajo el sándwich, las definiciones **1, 2, 4, 5, 6,
+> 14, 16 y 17** caen en dominio de T05: no podemos opinar sobre la forma de los tests ni sobre la
+> visibilidad si no sabemos qué es un test. Entre ellas dos que costaron trabajo: **D12 /
+> `PAQUETE_RESERVADO`** (no se puede validar un paquete si no se sabe qué es un paquete) y **D10 /
+> captura de `stdout` por test**, que pasa a depender de cómo G5 escriba su capa. Sigue viva y sin
+> tocar la **definición 8** (¿el botón *Ejecutar* del IDE pasa por el sandbox?), que es **A5** en el
+> README y cambia el dimensionamiento por completo.
 
 | # | Definición | Postura propuesta |
 |---|---|---|
