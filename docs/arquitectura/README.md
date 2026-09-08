@@ -42,6 +42,7 @@
 | Preparar la defensa de la unidad de patrones | [`05-ms-sandbox-patrones.md`](./05-ms-sandbox-patrones.md) |
 | **Entender cómo se hablan el worker y el ejecutor, sin dar nada por sabido** | [`09-worker-ejecutor-explicado.md`](./09-worker-ejecutor-explicado.md) |
 | **Entender la integración con el Grupo 5 y qué nos cambia** *(empezar acá)* | [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) |
+| **Entender dónde se verifica que hubo ejecución de verdad (D16)** | [`12-d16-evidencia-de-ejecucion.md`](./12-d16-evidencia-de-ejecucion.md) |
 | Ver el sándwich contado largo, con glosario y los cuatro tipos de desafío | [`10-propuesta-g5-sandwich.md`](./10-propuesta-g5-sandwich.md) |
 | Leer lo que efectivamente se le mandó al Grupo 5 | [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) |
 
@@ -64,6 +65,7 @@ Cuando dos documentos digan cosas distintas sobre un mismo tema, **manda el de e
 | Explicación divulgativa del worker ↔ ejecutor y del recorrido del tar | [`09-worker-ejecutor-explicado.md`](./09-worker-ejecutor-explicado.md) | — (no es fuente de verdad: si contradice a `04` o `08`, mandan ellos) |
 | **Integración con el Grupo 5: el sándwich, el diff contra el V4, el catálogo de perfiles** | [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) | `10` (**documento único y autocontenido** de la integración; cuando G5 conteste, lo que sobreviva se muda a `03`, `07` y `08`) |
 | El sándwich contado largo: glosario, los cuatro tipos de desafío, la película completa | [`10-propuesta-g5-sandwich.md`](./10-propuesta-g5-sandwich.md) | — (versión **extendida y divulgativa** del `11` §2; si contradice al `11`, manda el `11`) |
+| **Verificación de evidencia de ejecución: quién la hace y qué pasa si falla** | [`12-d16-evidencia-de-ejecucion.md`](./12-d16-evidencia-de-ejecucion.md) | `04` §6, `08` §5 (**propuesta cerrada, falta confirmar** — ver D16) |
 | Estado de decisiones | **este archivo** | todos |
 
 **Nota sobre el `07`.** Hay dos: [`07-arquitectura-api.md`](./07-arquitectura-api.md) (documento, 652 líneas)
@@ -86,10 +88,13 @@ a partir de él. Unificarlos o separarlos formalmente sigue abierto (D14 abajo).
 | **D5** | **El bundle entra por `stdin`**, no por `docker cp`. Saca del camino el endpoint más peligroso y elimina el `attach` bidireccional | `03` §1.5, `08` §5 | 30-ago-2026 |
 | **D6** | **El veredicto sale del XML de JUnit con `tests > 0`**, nunca del exit code. Verificado: `System.exit(0)` aprobaba | `03` §5.1, `00` §8 | 27-ago-2026 |
 
-> **⚠ D6 en revisión por el V4.** El principio sigue en pie —el veredicto sale del reporte, nunca
-> del código de salida— pero **el lugar donde se verifica se cae**: bajo el sándwich la tapa ya no
-> sabe leer un XML de JUnit, porque no sabe que existe JUnit. Dónde se muda esa verificación es
-> **D16**, y hay que cerrarla antes de tocar el entrypoint (`11` §6).
+> **⚠ D6 en revisión por el V4, y menos grave de lo que parecía.** El principio sigue en pie —el
+> veredicto sale del reporte, nunca del código de salida— y **el lugar donde se decide tampoco se
+> mueve**: el análisis de **D16** ([`12`](./12-d16-evidencia-de-ejecucion.md)) encontró que la
+> verificación ya vive en el worker desde antes del V4, y que el conteo de la tapa era una copia
+> redundante. Lo que se cae es esa copia, más el enunciado: D6 nombra a JUnit, y bajo el sándwich la
+> regla se reformula como **"no hay `EXITO` sin evidencia legible de que corrió al menos una unidad
+> de evaluación"**, con el formato declarado por el perfil.
 
 > Las fechas de **D1–D3** son las de la decisión explícita; las de **D4–D6** son las del documento
 > que las fija, que es lo más preciso que tenemos.
@@ -115,7 +120,7 @@ están planteadas en la respuesta que ya les mandamos y esperan contestación.
 
 | # | Decisión | Estado | Quién la cierra |
 |---|---|---|---|
-| **D16** | **¿Dónde se verifica "hay evidencia real de ejecución" cuando la tapa no sabe leer el reporte?** Propuesta: se muda al worker, indexada por el `reportFormat` que declara el perfil | **Abierta y urgente: no depende de G5 y bloquea P9.** Reemplaza a D6 bajo el sándwich | Nosotros |
+| **D16** | **¿Dónde se verifica "hay evidencia real de ejecución" cuando la tapa no sabe leer el reporte?** **Analizada y con propuesta cerrada el 8‑sep‑2026** en [`12-d16-evidencia-de-ejecucion.md`](./12-d16-evidencia-de-ejecucion.md): la verificación **ya estaba en el worker** —la tapa sólo tenía una copia redundante—, así que lo que se hace es borrar esa copia e indexar la del worker por `reportFormat`. Reemplaza a D6 bajo el sándwich | **Falta que el equipo confirme tres cosas** (`12` §9): la Opción C, el **fail-closed** (formato ilegible ⇒ `ERROR_INTERNO`, nunca `EXITO`) y que el criterio de aceptación de P9 se mida **en veredictos, no en códigos de salida**. Confirmadas, desbloquea P9 | Nosotros |
 | **D17** | **¿Aceptamos la Opción 1 (catálogo de perfiles)?** Propuesta: sí, con perfiles **inmutables y versionados** (`POST` crea versión nueva, `PUT` se rechaza) y ciclo `BORRADOR → VALIDADA → ACTIVA → DEPRECADA` | Mandada en la respuesta §4.1. Espera confirmación | Nosotros + T05 |
 | **D18** | **¿Los límites viven en el perfil o en el request?** Propuesta: **en el perfil**, con presupuestos separados de compilación y evaluación, y el reloj del alumno medido en **tiempo de CPU**, no de pared | Mandada en la respuesta §4.3. Espera confirmación | Nosotros + T05 |
 | **D19** | **Bandas de códigos de salida:** `0` y `40–59` de ellos (su tabla), `20–31` nuestros, hueco `32–39`, cualquier otro es error de infraestructura | Mandada en la respuesta §2.3. Espera la tabla del `40–59` (**A3**) | Nosotros + T05 |
@@ -145,7 +150,7 @@ Ninguna se resuelve rehaciendo código nuestro (`11` §12).
 | P4 | Contrato **OpenAPI** y un stub para T05 | Abierto |
 | P5 | Cachear la suite de tests compilada por versión de desafío | Bloqueado por **D13** |
 | P6 | **R14.1** — revisión línea por línea de la implementación elegida, por dos personas que no la escribieron | Bloqueado por **D9** |
-| **P9** | **Refactor del `entrypoint.sh` al sándwich:** sacar los pasos 2–5 (todo el conocimiento de Java —`javac` en dos fases, derivación de nombres de clase, `--select-class`, `--include-classname`— se va al `run.sh` de G5), invocar `cd /work/in && sh ./run.sh`, y generalizar el sobre: `exitCodeJava`, `clasesTest` y `testsEnReporte` dejan de tener sentido como campos fijos | **Bloqueado por D16.** No espera a G5: `11` §9 muestra que el mecanismo del contenedor es idéntico en las tres opciones. El criterio de aceptación ya está escrito en `11` §10 — `ok-suma`, `hostil-exit0`, `hostil-cpu` y `hostil-reporte-loop` tienen que dar **exactamente el mismo veredicto que hoy** |
+| **P9** | *(bloqueo en revisión: D16 tiene propuesta cerrada, ver `12`)* **Refactor del `entrypoint.sh` al sándwich:** sacar los pasos 2–5 (todo el conocimiento de Java —`javac` en dos fases, derivación de nombres de clase, `--select-class`, `--include-classname`— se va al `run.sh` de G5), invocar `cd /work/in && sh ./run.sh`, y generalizar el sobre: `exitCodeJava`, `clasesTest` y `testsEnReporte` dejan de tener sentido como campos fijos | **Bloqueado por D16.** No espera a G5: `11` §9 muestra que el mecanismo del contenedor es idéntico en las tres opciones. El criterio de aceptación ya está escrito en `11` §10 — `ok-suma`, `hostil-exit0`, `hostil-cpu` y `hostil-reporte-loop` tienen que dar **exactamente el mismo veredicto que hoy** |
 | **P8** | **Los bundles hostiles tienen rutas hardcodeadas.** Al mover el reporte a `/work`, `hostil-reporte` y `hostil-reporte-loop` siguieron apuntando a `/tmp/reports` y **el ataque se desarmó solo**: la suite daba verde sin probar nada. Corregido, pero el acoplamiento sigue | **Mitigado, no resuelto.** La ruta debería salir de una variable que el entrypoint exporte, o el test debería fallar si el ataque no llega a destino |
 
 ### Cerrado

@@ -616,6 +616,15 @@ tapa, porque es contar archivos, no interpretarlos.
 
 **Esto hay que decidirlo antes de tocar el entrypoint.** Es **D16**.
 
+> **Actualización del 8‑sep‑2026.** D16 se analizó y tiene propuesta cerrada en
+> [`12-d16-evidencia-de-ejecucion.md`](./12-d16-evidencia-de-ejecucion.md). El análisis **corrige
+> esta sección en un punto**: la verificación no hay que mudarla, porque **ya está en el worker**
+> desde antes del V4 (`04` §6 la aplica y explícitamente no le cree al contador del runner). Lo que
+> hace la tapa es una copia redundante. D16 es entonces borrar esa copia e indexar por formato la
+> que queda — más barato y sin ventana de desprotección. Lo que esta sección **no** cubría y sí
+> hace falta decidir es el **fail-closed**: qué pasa con un `reportFormat` desconocido o ilegible
+> (`12` §5).
+
 ---
 
 ## 7. Qué se cae de nuestros documentos
