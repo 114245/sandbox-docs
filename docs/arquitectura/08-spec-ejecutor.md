@@ -9,6 +9,27 @@
 
 ## 0. Cambios desde la primera versión
 
+> ## ⚠ En revisión por el V4 del Grupo 5 (8‑sep‑2026)
+>
+> **La mayor parte de esta spec sobrevive intacta**, y conviene decirlo primero: el ejecutor es
+> **transporte, no lenguaje**. Nada de lo que el V4 mueve toca el transporte por socket Unix (§2),
+> el contrato HTTP con el worker (§3), el demultiplexado (§6), el mecanismo del nonce (§7), los
+> timeouts (§8), la concurrencia (§9), la limpieza de huérfanos (§10) ni los invariantes de
+> seguridad (§12). Las dos implementaciones —Java 58 tests, Node 65 tests— siguen siendo válidas y
+> **ganan peso relativo**, porque pasan a ser casi lo único que aportamos al veredicto.
+>
+> **Lo que sí queda en revisión:**
+>
+> | Sección | Qué le pasa |
+> |---|---|
+> | **§4** constantes | Hoy dicen que todo valor numérico es *constante de compilación, nunca un parámetro de request*. Con el catálogo de perfiles, **la imagen y los límites salen del perfil**. El invariante se sostiene igual —nadie de afuera fija los recursos— pero cambia de forma: el perfil es nuestro, versionado e inmutable, y el cliente elige de un catálogo, no escribe un número (**D18**, **D21**) |
+> | **§5** secuencia | El sobre se generaliza: `exitCodeJava`, `clasesTest` y `testsEnReporte` dejan de tener sentido como campos fijos cuando la tapa no sabe qué corrió adentro (**P9**) |
+> | **§7** validación del tar | La spec no fija hoy las reglas de la extracción; las fija de hecho `sandbox/runner/entrypoint.sh`, con una **lista blanca de rutas** (sólo `src/…` y `test/…`, líneas 181‑184). Esa lista no sobrevive a tener `run.sh` en la raíz y configuraciones de G5 en cualquier lado. La spec tiene que **escribir la regla nueva**, que es por **tipo** de entrada y no por prefijo: sin `..`, sin barra inicial, **sin enlaces simbólicos ni duros** (**P2**) |
+> | **§13** aceptación | Se le suman los casos de symlink y hardlink, y el criterio de `11` §10: los cuatro casos que ya existen tienen que dar **exactamente el mismo veredicto** después del refactor |
+>
+> Ver [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §10 y §11, y
+> [`Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) §2.4.
+
 > **Leer esto primero.** La implementación en Java se construyó contra la versión anterior de este documento y **no** cubre lo de abajo. Las dos implementaciones tienen que quedar alineadas con esta versión.
 
 | # | Cambio | Dónde | Impacto |
