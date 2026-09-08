@@ -6,6 +6,11 @@ La mitad del servicio que **no ejecuta nada**: de qué se hace cargo la API, por
 
 *Propuesta de arquitectura · para discutir*
 
+> **⚠ Falta el catálogo de perfiles.** Esta lámina se regenera a partir de
+> [`07-arquitectura-api.md`](./07-arquitectura-api.md), y el documento todavía no incorporó la
+> familia de endpoints que trajo el V4 del Grupo 5. El outbox, que es el corazón de la lámina, no
+> se mueve. Ver el aviso del `07`.
+
 ---
 
 ## 01 · El malentendido que hay que sacar de encima

@@ -7,11 +7,17 @@
 > [glosario](#glosario) del final. Si ya leíste el [`09`](./09-worker-ejecutor-explicado.md),
 > esto sigue justo donde ese termina.
 >
-> **Estado: ABIERTO.** Esto **no** es una decisión tomada ni un documento entregado. Es lo que
-> le vamos a contestar al Grupo 5, en construcción. Cuando se cierre, lo decidido se muda a
-> [`08-spec-ejecutor.md`](./08-spec-ejecutor.md) y este archivo queda como el registro de por qué.
+> **Estado (8‑sep‑2026): ya se contestó.** Esto dejó de estar en construcción. El Grupo 5 mandó su
+> **V4** —que llegó por su cuenta al mismo diseño de dos capas, sin haber leído nada de esto— y le
+> contestamos con [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md),
+> donde aceptamos el modelo y elegimos la Opción 1.
 >
-> Última edición: **5 de septiembre de 2026**.
+> **Este archivo queda como la versión larga y divulgativa**, con el glosario, los cuatro tipos de
+> desafío y la película completa. El documento único de la integración —el diff contra el V4, las
+> ausencias, el catálogo de perfiles y las decisiones D16–D21— es
+> [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md). **Si los dos se contradicen, manda el `11`.**
+>
+> Última edición: **5 de septiembre de 2026** (encabezado actualizado el 8).
 
 ---
 
