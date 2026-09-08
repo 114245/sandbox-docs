@@ -7,7 +7,26 @@
 > conviene leerlos, y —lo más importante— **una única tabla de qué está decidido y qué sigue
 > abierto**. Antes esa tabla estaba repartida en tres archivos que se contradecían entre sí.
 >
-> Última revisión: **4 de septiembre de 2026** — incluye la integración ejecutor + imagen real (P0).
+> Última revisión: **8 de septiembre de 2026** — incorpora el **V4 del Grupo 5** y la respuesta que
+> les mandamos.
+>
+> ### ⚠ El V4 mueve el piso de varios documentos
+>
+> El 7‑sep‑2026 llegó `Propuesta_Integracion_G5_G6_Entrypoint_V4.pdf` y le contestamos con
+> [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md), donde
+> **aceptamos el modelo de dos capas y elegimos la Opción 1** (catálogo de perfiles). Eso corre la
+> frontera de dominio: dejamos de ser *corredor de Java con opinión* y pasamos a ser
+> **infraestructura agnóstica de lenguaje**.
+>
+> La consecuencia para este índice: **`03`, `07`, `08`, `06` y `09` están escritos contra el
+> contrato anterior.** Siguen siendo la fuente de verdad de todo lo que el V4 no toca —aislamiento,
+> transporte, nonce, worker, outbox— pero su contrato con T05 y su máquina de estados están en
+> revisión. Qué se cae exactamente, documento por documento, está en
+> [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §7.
+>
+> **La reescritura profunda de esos documentos espera la contestación de G5**, por decisión de
+> `11` §13.6: escribirlos ahora sería escribirlos contra un contrato que todavía se mueve. Mientras
+> tanto, cada uno lleva un aviso de revisión en su encabezado.
 
 ---
 
@@ -22,7 +41,9 @@
 | Implementar el ejecutor | [`08-spec-ejecutor.md`](./08-spec-ejecutor.md) |
 | Preparar la defensa de la unidad de patrones | [`05-ms-sandbox-patrones.md`](./05-ms-sandbox-patrones.md) |
 | **Entender cómo se hablan el worker y el ejecutor, sin dar nada por sabido** | [`09-worker-ejecutor-explicado.md`](./09-worker-ejecutor-explicado.md) |
-| **Entender qué nos pidió el Grupo 5 y qué le vamos a contestar** *(abierto)* | [`10-propuesta-g5-sandwich.md`](./10-propuesta-g5-sandwich.md) |
+| **Entender la integración con el Grupo 5 y qué nos cambia** *(empezar acá)* | [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) |
+| Ver el sándwich contado largo, con glosario y los cuatro tipos de desafío | [`10-propuesta-g5-sandwich.md`](./10-propuesta-g5-sandwich.md) |
+| Leer lo que efectivamente se le mandó al Grupo 5 | [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) |
 
 ---
 
@@ -33,14 +54,16 @@ Cuando dos documentos digan cosas distintas sobre un mismo tema, **manda el de e
 | Tema | Fuente de verdad | Los demás lo referencian |
 |---|---|---|
 | Panorama de los 12 servicios del curso | [`01-panorama-microservicios-backend.md`](./01-panorama-microservicios-backend.md) | — |
-| Aislamiento, contrato con T05, origen de los tests, veredictos | [`03-ms-sandbox-ejecucion.md`](./03-ms-sandbox-ejecucion.md) | `00`, `05`, `06` |
+| Aislamiento, origen de los tests, medición de recursos | [`03-ms-sandbox-ejecucion.md`](./03-ms-sandbox-ejecucion.md) | `00`, `05`, `06` |
+| **Contrato con T05, máquina de estados, frontera de dominio** | [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) **manda sobre `03` §5.1, §6 y §7** | — (se lo sacó a `03` el 8‑sep; ver `11` §7) |
 | El worker: cola, DLQ, concurrencia, outbox, **la frontera con el ejecutor** | [`04-ms-sandbox-worker.md`](./04-ms-sandbox-worker.md) | `00`, `06`, `07` |
 | Patrones de microservicios aplicados | [`05-ms-sandbox-patrones.md`](./05-ms-sandbox-patrones.md) | `00` |
 | Vistas y diagramas | [`06-arquitectura-en-diagramas.md`](./06-arquitectura-en-diagramas.md) | `00` |
 | La API y el outbox | [`07-arquitectura-api.md`](./07-arquitectura-api.md) | `04`, `06` |
 | **El ejecutor: contrato, spec del contenedor, constantes** | [`08-spec-ejecutor.md`](./08-spec-ejecutor.md) | `04` §6 y §12, `05` §1, `06` §2 |
 | Explicación divulgativa del worker ↔ ejecutor y del recorrido del tar | [`09-worker-ejecutor-explicado.md`](./09-worker-ejecutor-explicado.md) | — (no es fuente de verdad: si contradice a `04` o `08`, mandan ellos) |
-| **Integración con el Grupo 5: el `run.sh` inyectado y la contrapropuesta del sándwich** | [`10-propuesta-g5-sandwich.md`](./10-propuesta-g5-sandwich.md) | — (**estado ABIERTO**: nada de lo que dice está decidido; cuando se cierre, se muda a `08`) |
+| **Integración con el Grupo 5: el sándwich, el diff contra el V4, el catálogo de perfiles** | [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) | `10` (**documento único y autocontenido** de la integración; cuando G5 conteste, lo que sobreviva se muda a `03`, `07` y `08`) |
+| El sándwich contado largo: glosario, los cuatro tipos de desafío, la película completa | [`10-propuesta-g5-sandwich.md`](./10-propuesta-g5-sandwich.md) | — (versión **extendida y divulgativa** del `11` §2; si contradice al `11`, manda el `11`) |
 | Estado de decisiones | **este archivo** | todos |
 
 **Nota sobre el `07`.** Hay dos: [`07-arquitectura-api.md`](./07-arquitectura-api.md) (documento, 652 líneas)
@@ -63,6 +86,11 @@ a partir de él. Unificarlos o separarlos formalmente sigue abierto (D14 abajo).
 | **D5** | **El bundle entra por `stdin`**, no por `docker cp`. Saca del camino el endpoint más peligroso y elimina el `attach` bidireccional | `03` §1.5, `08` §5 | 30-ago-2026 |
 | **D6** | **El veredicto sale del XML de JUnit con `tests > 0`**, nunca del exit code. Verificado: `System.exit(0)` aprobaba | `03` §5.1, `00` §8 | 27-ago-2026 |
 
+> **⚠ D6 en revisión por el V4.** El principio sigue en pie —el veredicto sale del reporte, nunca
+> del código de salida— pero **el lugar donde se verifica se cae**: bajo el sándwich la tapa ya no
+> sabe leer un XML de JUnit, porque no sabe que existe JUnit. Dónde se muda esa verificación es
+> **D16**, y hay que cerrarla antes de tocar el entrypoint (`11` §6).
+
 > Las fechas de **D1–D3** son las de la decisión explícita; las de **D4–D6** son las del documento
 > que las fija, que es lo más preciso que tenemos.
 
@@ -80,17 +108,44 @@ a partir de él. Unificarlos o separarlos formalmente sigue abierto (D14 abajo).
 | **D14** | **Unificar o separar formalmente los dos `07`** | Abierto | Nosotros |
 | **D15** | **¿1 CPU o 2 por contenedor?** `08` §4.1 fija `NanoCpus: 1000000000` (**1 CPU**); `03` §1.4a y §4.3 y `04` §11 dicen **2** | **Medido de nuevo el 4-sep-2026, ahora de punta a punta:** el mismo bundle tarda **8.4 s con 1 CPU** (compilación 5.1 s) contra **3.3 s con 2 CPU**. No rompe —los relojes de adentro son 20 s por compilación y 60 s de pared— pero se come la mitad del presupuesto sin necesidad. Cambiarlo rompe el golden test A1 a propósito | Nosotros |
 
+### Abiertas por el V4 del Grupo 5
+
+Todas nacen de [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §12. Las que dicen "Nosotros + T05"
+están planteadas en la respuesta que ya les mandamos y esperan contestación.
+
+| # | Decisión | Estado | Quién la cierra |
+|---|---|---|---|
+| **D16** | **¿Dónde se verifica "hay evidencia real de ejecución" cuando la tapa no sabe leer el reporte?** Propuesta: se muda al worker, indexada por el `reportFormat` que declara el perfil | **Abierta y urgente: no depende de G5 y bloquea P9.** Reemplaza a D6 bajo el sándwich | Nosotros |
+| **D17** | **¿Aceptamos la Opción 1 (catálogo de perfiles)?** Propuesta: sí, con perfiles **inmutables y versionados** (`POST` crea versión nueva, `PUT` se rechaza) y ciclo `BORRADOR → VALIDADA → ACTIVA → DEPRECADA` | Mandada en la respuesta §4.1. Espera confirmación | Nosotros + T05 |
+| **D18** | **¿Los límites viven en el perfil o en el request?** Propuesta: **en el perfil**, con presupuestos separados de compilación y evaluación, y el reloj del alumno medido en **tiempo de CPU**, no de pared | Mandada en la respuesta §4.3. Espera confirmación | Nosotros + T05 |
+| **D19** | **Bandas de códigos de salida:** `0` y `40–59` de ellos (su tabla), `20–31` nuestros, hueco `32–39`, cualquier otro es error de infraestructura | Mandada en la respuesta §2.3. Espera la tabla del `40–59` (**A3**) | Nosotros + T05 |
+| **D20** | **Modelo asincrónico.** El V4 no lo menciona. Propuesta: el resultado viaja como evento `EjecucionFinalizada` por el bus de la plataforma (Kafka, del grupo de notificaciones), con el **resumen y no el detalle**; el reporte completo se busca por `GET` | Mandada en la respuesta §6. **Pendiente de contexto:** `07` §3.4 tiene el relay publicando a **RabbitMQ**, que es nuestra cola interna (`04` §3). Cómo se articula con el bus de la plataforma se resuelve con el panorama completo de eventos, no acá | Nosotros + T05 |
+| **D21** | **Catálogo de imágenes base:** quién las nombra, quién las versiona, quién aprueba una nueva. Incluye si la base pasa a ser **Alpine** — nuestro entrypoint está en **bash** y el shell reducido de Alpine no lo corre tal cual | Abierta. No depende de G5 | Nosotros |
+
+### Preguntas abiertas del contrato
+
+Ninguna se resuelve rehaciendo código nuestro (`11` §12).
+
+| # | Pregunta | Quién la contesta |
+|---|---|---|
+| **A1** | ¿El límite de CPU es por proceso o agregado? | Nosotros, con un caso de prueba |
+| **A2** | ¿Cuánta CPU y memoria consumen realmente PMD y ArchUnit? | **El Grupo 5**, con mediciones |
+| **A3** | ¿Qué etiquetas de fase y qué códigos `40–59` definen? | El Grupo 5 |
+| **A4** | ¿Cuántos perfiles arrancamos, y con qué contenido? | Los dos |
+| **A5** | **¿El botón "Ejecutar" del IDE pasa por el sandbox?** (definición 8 del `03` §7) | T05. Sigue abierta, el V4 no la toca, y **cambia el dimensionamiento por completo** |
+
 ---
 
 ## 4. Pendientes técnicos
 
 | # | Pendiente | Estado |
 |---|---|---|
-| P2 | Casos hostiles a nivel **tar**: enlaces simbólicos y duros | Abierto. Necesitan un harness que fabrique el tar a mano, porque `run.sh` lo arma solo |
+| P2 | Casos hostiles a nivel **tar**: enlaces simbólicos y duros | Abierto, y **subió de prioridad con el V4.** Necesitan un harness que fabrique el tar a mano, porque `run.sh` lo arma solo. Además hay que **reemplazar la lista blanca de rutas** (hoy sólo acepta lo que empiece con `src/` o `test/`) por prohibiciones sobre el **tipo** de entrada: con `run.sh` en la raíz y configuraciones de G5 en cualquier lado, esa lista no sobrevive, y mientras era angosta tapaba el hueco de los enlaces (`11` §10) |
 | P3 | La **suite hostil corriendo en CI** | Abierto. La suite existe y pasa 9/9; falta el pipeline. **Sumar ahí `scripts/integracion-runner.mjs`**, que es lo que cierra P0 y lo mantiene cerrado |
 | P4 | Contrato **OpenAPI** y un stub para T05 | Abierto |
 | P5 | Cachear la suite de tests compilada por versión de desafío | Bloqueado por **D13** |
 | P6 | **R14.1** — revisión línea por línea de la implementación elegida, por dos personas que no la escribieron | Bloqueado por **D9** |
+| **P9** | **Refactor del `entrypoint.sh` al sándwich:** sacar los pasos 2–5 (todo el conocimiento de Java —`javac` en dos fases, derivación de nombres de clase, `--select-class`, `--include-classname`— se va al `run.sh` de G5), invocar `cd /work/in && sh ./run.sh`, y generalizar el sobre: `exitCodeJava`, `clasesTest` y `testsEnReporte` dejan de tener sentido como campos fijos | **Bloqueado por D16.** No espera a G5: `11` §9 muestra que el mecanismo del contenedor es idéntico en las tres opciones. El criterio de aceptación ya está escrito en `11` §10 — `ok-suma`, `hostil-exit0`, `hostil-cpu` y `hostil-reporte-loop` tienen que dar **exactamente el mismo veredicto que hoy** |
 | **P8** | **Los bundles hostiles tienen rutas hardcodeadas.** Al mover el reporte a `/work`, `hostil-reporte` y `hostil-reporte-loop` siguieron apuntando a `/tmp/reports` y **el ataque se desarmó solo**: la suite daba verde sin probar nada. Corregido, pero el acoplamiento sigue | **Mitigado, no resuelto.** La ruta debería salir de una variable que el entrypoint exporte, o el test debería fallar si el ataque no llega a destino |
 
 ### Cerrado
@@ -120,7 +175,9 @@ veredicto de ser falso), los tres relojes y el ulimit `cpu` (fijados en `08` §4
 | `hallazgos-investigacion-sandbox.md` | Investigación externa sobre el sandbox: CVEs de Judge0 y Ares, papers, fuentes. Lo que trajo está marcado **[IE]** en los documentos |
 | `docs/respuesta-sidecar-ejecutor.md` | Respuesta a la investigación del **ejecutor**: el rediseño que elimina el `attach` hijacked, y tres correcciones al briefing |
 | `docs/briefing-investigacion-*.md` | Los dos briefings autocontenidos que se llevaron a fuentes externas |
-| `otros/Contrato_Sandbox_Tema05.md` | El contrato con T05 |
+| `otros/Contrato_Sandbox_Tema05.md` | **⚠ OBSOLETO.** El primer borrador del contrato con T05: Python 3.11, `source_code` único y `test_cases[]` con `expected_stdout`. Nada de eso sobrevive al V4. Sobrevive sólo el **modelo asincrónico** y la distinción `infra_error` vs. falla del alumno. Lo reemplaza `otros/Respuesta_G8_a_Propuesta_V4.md` §2 y §6 |
+| `otros/Respuesta_G8_a_Propuesta_V4.md` | **La respuesta que le mandamos al Grupo 5** el 7‑sep‑2026: aceptamos el modelo de dos capas y la Opción 1, y les pasamos la mitad del contrato del contenedor que no conocían (buzón de salida, códigos de salida, desvío de `stdout`, qué hace la capa 1 después). Tiene también su PDF |
+| `Propuesta_Integracion_G5_G6_Entrypoint_V4.pdf` | Lo que mandó el Grupo 5. Analizado en `11` |
 | `docs/_fuentes/` | Propuesta de la cátedra, láminas, y las versiones de los documentos previas a la investigación |
 
 > **Cómo se corre cada una en Windows.** El cliente de Docker de **Node** habla tanto sockets Unix como
