@@ -15,6 +15,21 @@
 
 ## 1. La idea en una frase
 
+> ## ⚠ Una cosa cambió después de escribir esto (8‑sep‑2026)
+>
+> **Todo lo que este documento explica sigue siendo cierto**: el worker, la ventanilla, el ejecutor,
+> el recorrido del tar y el glosario no los toca nada. Es el camino del paquete, y ese camino no se
+> movió.
+>
+> Lo que cambió es **qué pasa adentro del taller**. Acá se cuenta como si el contenedor supiera
+> Java: compila, corre JUnit, lee el XML. Con el modelo de dos capas que acordamos con el Grupo 5,
+> el contenedor **deja de saberlo**: adentro del tar viaja además un `run.sh` escrito por ellos, y
+> nuestro entrypoint sólo lo invoca y recoge lo que haya quedado en `/work/reports`.
+>
+> Si querés la versión larga y sin dar nada por sabido de ese cambio —es el mismo registro
+> divulgativo que este documento— está en
+> [`10-propuesta-g5-sandwich.md`](./10-propuesta-g5-sandwich.md).
+
 Hay dos procesos y una ventanilla entre ellos.
 
 > El **worker** prepara un paquete con el código del alumno y se lo pasa por una ventanilla
