@@ -7,12 +7,8 @@ import org.junit.jupiter.api.Timeout;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -20,32 +16,33 @@ import static org.junit.jupiter.api.Assertions.*;
 class EjecucionTest {
 
     private static final String NONCE_REGEX = "[0-9a-f]{32}";
+    /** El guion de la capa 2. Contenido irrelevante; lo que importa es su largo en BYTES. */
+    private static final byte[] GUION =
+            "#!/bin/sh\necho capa 2 con acento: ñ\n".getBytes(StandardCharsets.UTF_8);
+    /** nonce (32) + \n + largo del guion + \n */
+    private static final int CABECERA = 32 + 1 + String.valueOf(GUION.length).length() + 1;
 
-    private Path directorio;
+    /** El perfil de prueba de esta suite: mismo guion de siempre, envuelto en el catalogo. */
+    private static final Catalogo.Perfil PERFIL = Catalogo.Perfil.armar(
+            "java21-junit", 3, "sandbox-runner:2.0.0-capa1", GUION, "junit-xml", 512, 20);
+    private static final String PERFIL_CLAVE = PERFIL.clave();
+    private static final Catalogo CATALOGO = Catalogo.deUnSolo(PERFIL);
+
     private DaemonDePrueba daemon;
-    private ClienteDocker cliente;
+    private Docker docker;
     private Ejecucion ejecucion;
-    private ExecutorService hilos;
-    private ScheduledExecutorService reloj;
 
     @BeforeEach
     void levantar() throws Exception {
-        directorio = Files.createTempDirectory("dk");
-        daemon = new DaemonDePrueba(directorio.resolve("d.sock"));
-        reloj = Executors.newScheduledThreadPool(2);
-        hilos = Executors.newVirtualThreadPerTaskExecutor();
-        cliente = new ClienteDocker(daemon.rutaSocket(), reloj);
-        ejecucion = new Ejecucion(cliente, hilos, reloj);
+        daemon = new DaemonDePrueba();
+        docker = Docker.conectar(daemon.dockerHost());
+        ejecucion = new Ejecucion(docker, CATALOGO);
     }
 
     @AfterEach
     void bajar() throws Exception {
+        docker.close();
         daemon.close();
-        hilos.shutdownNow();
-        reloj.shutdownNow();
-        try (var f = Files.walk(directorio)) {
-            f.sorted(java.util.Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
-        }
     }
 
     private static byte[] concatenar(byte[]... partes) {
@@ -60,14 +57,12 @@ class EjecucionTest {
     @Test
     @Timeout(30)
     void caminoFeliz() {
-        // El nonce lo elige el ejecutor, asi que el "entrypoint" de mentira no puede saberlo de antemano.
-        // Se resuelve en dos etapas: primero corremos para capturar el nonce que entro por stdin.
         daemon.logs = concatenar(
                 DaemonDePrueba.frame(1, "compilando\n"),
                 DaemonDePrueba.frame(2, "un aviso\n"));
 
         String ejecucionId = id();
-        var salida = ejecucion.ejecutar(ejecucionId, "TAR".getBytes(StandardCharsets.UTF_8));
+        var salida = ejecucion.ejecutar(ejecucionId, "TAR".getBytes(StandardCharsets.UTF_8), PERFIL_CLAVE);
 
         assertEquals(Ejecucion.Estado.COMPLETADA, salida.resultado());
         assertEquals(0, salida.exitCode());
@@ -81,30 +76,44 @@ class EjecucionTest {
         int attach = indiceDe("/attach");
         int start = indiceDe("/start");
         int logs = indiceDe("/logs");
-        int borrado = indiceDe("?force=1");
+        int borrado = indiceDe("force=true");
         assertTrue(attach < start, "el attach tiene que ir antes del start");
         assertTrue(logs < borrado, "los logs se leen antes del delete");
         assertTrue(indiceDe("/wait") < logs);
     }
 
-    /** R7.1 y R7.2: el nonce es la primera linea de stdin, y despues van los bytes del tar. */
+    /**
+     * R7.1, R7.2 y el framing de tres documentos: nonce, largo del guion, guion, y el tar como
+     * "lo que quede del stream".
+     */
     @Test
     @Timeout(30)
-    void r72_stdinLlevaNonceYDespuesElTar() {
+    void framingDeTresDocumentos() {
         byte[] tar = "contenido del tar, opaco".getBytes(StandardCharsets.UTF_8);
-        ejecucion.ejecutar(id(), tar);
+        ejecucion.ejecutar(id(), tar, PERFIL_CLAVE);
 
-        byte[] recibido = daemon.stdinRecibido;
-        assertNotNull(recibido, "no llego nada por el socket adjunto");
-        String texto = new String(recibido, StandardCharsets.UTF_8);
-        int salto = texto.indexOf('\n');
-        assertTrue(salto > 0, "el nonce tiene que terminar en salto de linea");
+        byte[] recibido = daemon.esperarStdin();
+        assertNotNull(recibido, "no llego nada por el canal adjunto");
+        String texto = new String(recibido, StandardCharsets.ISO_8859_1);
 
-        String nonce = texto.substring(0, salto);
-        assertTrue(nonce.matches(NONCE_REGEX), "nonce de 32 hex minusculas, era: " + nonce.length() + " chars");
-        assertArrayEquals(tar, java.util.Arrays.copyOfRange(recibido, salto + 1, recibido.length),
-                "despues del nonce van los bytes del tar, sin tocar");
-        assertTrue(daemon.stdinCerrado, "el socket adjunto se cierra entero");
+        int salto1 = texto.indexOf('\n');
+        assertTrue(salto1 > 0, "el nonce tiene que terminar en salto de linea");
+        String nonce = texto.substring(0, salto1);
+        assertTrue(nonce.matches(NONCE_REGEX), "nonce de 32 hex minusculas, era: " + nonce);
+
+        int salto2 = texto.indexOf('\n', salto1 + 1);
+        String largo = texto.substring(salto1 + 1, salto2);
+        // Bytes, no caracteres: el guion tiene una ñ, asi que length() daria uno menos.
+        assertEquals(String.valueOf(GUION.length), largo,
+                "el largo se cuenta en bytes; con caracteres el guion llegaria cortado");
+        assertNotEquals(String.valueOf("#!/bin/sh\necho capa 2 con acento: ñ\n".length()), largo);
+
+        int desdeGuion = salto2 + 1;
+        assertArrayEquals(GUION, Arrays.copyOfRange(recibido, desdeGuion, desdeGuion + GUION.length),
+                "el guion de la capa 2 viaja tal cual, opaco");
+        assertArrayEquals(tar, Arrays.copyOfRange(recibido, desdeGuion + GUION.length, recibido.length),
+                "despues del guion van los bytes del tar, sin tocar");
+        assertTrue(daemon.stdinCerrado, "el canal adjunto se cierra entero: es el EOF del contenedor");
     }
 
     /** I7: el ejecutor no desempaqueta ni interpreta el tar; lo reenvia byte a byte. */
@@ -113,10 +122,10 @@ class EjecucionTest {
     void i7_elTarViajaOpaco() {
         byte[] basura = new byte[1024];
         new java.util.Random(7).nextBytes(basura);
-        ejecucion.ejecutar(id(), basura);
+        ejecucion.ejecutar(id(), basura, PERFIL_CLAVE);
 
-        byte[] recibido = daemon.stdinRecibido;
-        byte[] cuerpo = java.util.Arrays.copyOfRange(recibido, 33, recibido.length);   // 32 hex + \n
+        byte[] recibido = daemon.esperarStdin();
+        byte[] cuerpo = Arrays.copyOfRange(recibido, CABECERA + GUION.length, recibido.length);
         assertArrayEquals(basura, cuerpo);
     }
 
@@ -124,19 +133,30 @@ class EjecucionTest {
     @Test
     @Timeout(30)
     void elNonceEsDistintoCadaVez() {
-        ejecucion.ejecutar(id(), new byte[0]);
-        String primero = new String(daemon.stdinRecibido, StandardCharsets.UTF_8).substring(0, 32);
-        ejecucion.ejecutar(id(), new byte[0]);
-        String segundo = new String(daemon.stdinRecibido, StandardCharsets.UTF_8).substring(0, 32);
+        ejecucion.ejecutar(id(), new byte[0], PERFIL_CLAVE);
+        String primero = new String(daemon.esperarStdin(), StandardCharsets.UTF_8).substring(0, 32);
+        ejecucion.ejecutar(id(), new byte[0], PERFIL_CLAVE);
+        String segundo = new String(daemon.esperarStdin(), StandardCharsets.UTF_8).substring(0, 32);
         assertNotEquals(primero, segundo);
+    }
+
+    /** R7.3: el nonce no viaja como variable de entorno ni aparece en la spec del contenedor. */
+    @Test
+    @Timeout(30)
+    void r73_elNonceNoTocaLaSpecDelContenedor() {
+        ejecucion.ejecutar(id(), new byte[0], PERFIL_CLAVE);
+        String nonce = new String(daemon.esperarStdin(), StandardCharsets.UTF_8).substring(0, 32);
+
+        String rutaCreate = daemon.llamadas.stream().filter(l -> l.contains("/create")).findFirst().orElseThrow();
+        String create = new String(daemon.cuerpos.get(rutaCreate), StandardCharsets.UTF_8);
+        assertFalse(create.contains(nonce), "el nonce se filtro al cuerpo de create");
+        assertFalse(rutaCreate.contains(nonce), "el nonce se filtro a la query de create");
     }
 
     /** El bloque de reporte se extrae con el nonce real de la ejecucion y sale de stdout. */
     @Test
     @Timeout(30)
     void elReporteSeSeparaConElNonceDeLaEjecucion() throws Exception {
-        // Primera pasada solo para conocer el nonce que genera el ejecutor no sirve: cambia siempre.
-        // En cambio se le pide al daemon que arme los logs en el momento, usando lo que entro por stdin.
         var salida = ejecutarConReporte("<testsuite name=\"REAL\"/>");
 
         assertEquals("<testsuite name=\"REAL\"/>", salida.reporte());
@@ -157,12 +177,16 @@ class EjecucionTest {
         assertTrue(salida.stdout().contains("MENTIRA"));
     }
 
-    /** R6.1: si logs vuelve como raw-stream el contenedor tenia TTY; eso es ERROR_DAEMON. */
+    /**
+     * R6.1 y R6.4: una salida que no viene enmarcada es un contenedor con TTY. docker-java la
+     * entrega como frames RAW, y adivinar que eso es stdout es como se corrompe un resultado en
+     * silencio: es ERROR_DAEMON.
+     */
     @Test
     @Timeout(30)
-    void r61_rawStreamEsErrorDaemon() {
-        daemon.contentTypeLogs = "application/vnd.docker.raw-stream";
-        var salida = ejecucion.ejecutar(id(), new byte[0]);
+    void r61_salidaSinEnmarcarEsErrorDaemon() {
+        daemon.logs = "salida cruda, sin encabezado de 8 bytes\n".getBytes(StandardCharsets.UTF_8);
+        var salida = ejecucion.ejecutar(id(), new byte[0], PERFIL_CLAVE);
         assertEquals(Ejecucion.Estado.ERROR_DAEMON, salida.resultado());
         assertNull(salida.exitCode());
     }
@@ -173,7 +197,7 @@ class EjecucionTest {
     void exitCodeDistintoDeCeroSigueSiendoCompletada() {
         daemon.exitCode = 1;
         daemon.logs = DaemonDePrueba.frame(2, "error: cannot find symbol\n");
-        var salida = ejecucion.ejecutar(id(), new byte[0]);
+        var salida = ejecucion.ejecutar(id(), new byte[0], PERFIL_CLAVE);
         assertEquals(Ejecucion.Estado.COMPLETADA, salida.resultado());
         assertEquals(1, salida.exitCode());
         assertTrue(salida.stderr().contains("cannot find symbol"));
@@ -184,7 +208,7 @@ class EjecucionTest {
     @Timeout(30)
     void createQueFallaEsErrorDaemon() {
         daemon.creates201 = false;
-        var salida = ejecucion.ejecutar(id(), new byte[0]);
+        var salida = ejecucion.ejecutar(id(), new byte[0], PERFIL_CLAVE);
         assertEquals(Ejecucion.Estado.ERROR_DAEMON, salida.resultado());
         assertTrue(ejecucion.contenedoresEnVuelo().isEmpty());
     }
@@ -193,8 +217,8 @@ class EjecucionTest {
     @Test
     @Timeout(30)
     void siempreSeBorraElContenedor() {
-        ejecucion.ejecutar(id(), new byte[0]);
-        assertTrue(daemon.llamadas.stream().anyMatch(l -> l.contains("?force=1&v=1")),
+        ejecucion.ejecutar(id(), new byte[0], PERFIL_CLAVE);
+        assertTrue(daemon.llamadas.stream().anyMatch(l -> l.contains("v=true") && l.contains("force=true")),
                 "el delete tiene que ir con force y v");
         assertTrue(ejecucion.contenedoresEnVuelo().isEmpty());
     }
@@ -204,18 +228,18 @@ class EjecucionTest {
      * parciales y se borra. El resultado es TIMEOUT con exitCode null.
      */
     @Test
-    @Timeout(120)
+    @Timeout(180)
     void r82_timeoutMataYDevuelveLaSalidaParcial() {
         daemon.demoraWaitMs = Constantes.TIMEOUT_EJECUCION_MS * 3;
         daemon.logs = DaemonDePrueba.frame(1, "arranque y me colgue\n");
 
-        var salida = ejecucion.ejecutar(id(), new byte[0]);
+        var salida = ejecucion.ejecutar(id(), new byte[0], PERFIL_CLAVE);
 
         assertEquals(Ejecucion.Estado.TIMEOUT, salida.resultado());
         assertNull(salida.exitCode());
         assertEquals("arranque y me colgue\n", salida.stdout(), "la salida parcial se devuelve igual");
         assertTrue(daemon.llamadas.stream().anyMatch(l -> l.contains("/kill")));
-        assertTrue(daemon.llamadas.stream().anyMatch(l -> l.contains("?force=1")));
+        assertTrue(daemon.llamadas.stream().anyMatch(l -> l.contains("force=true")));
         assertTrue(salida.duracionMs() >= Constantes.TIMEOUT_EJECUCION_MS);
     }
 
@@ -223,25 +247,31 @@ class EjecucionTest {
     @Test
     @Timeout(30)
     void r50_todasLasRutasLlevanLaVersion() {
-        ejecucion.ejecutar(id(), new byte[0]);
+        ejecucion.ejecutar(id(), new byte[0], PERFIL_CLAVE);
+        assertFalse(daemon.llamadas.isEmpty());
         for (String llamada : daemon.llamadas) {
             assertTrue(llamada.startsWith("/" + Constantes.VERSION_API_DOCKER + "/"),
                     "ruta sin version: " + llamada);
         }
     }
 
-    /** A1 en vivo: el cuerpo que recibe el daemon es exactamente el golden. */
+    /**
+     * A1 en vivo: el cuerpo que recibe el daemon es exactamente el golden.
+     *
+     * Es el test que sostiene la mitigacion de haber pasado a docker-java. SpecTest compara el
+     * golden contra lo que serializa Spec; este compara lo que serializa Spec contra lo que salio
+     * de verdad por el socket. Juntos cierran I1: la spec del cable es la spec del archivo.
+     */
     @Test
     @Timeout(30)
-    void elCuerpoDeCreateEsElGolden() throws Exception {
+    void elCuerpoDeCreateEsElGolden() {
         String ejecucionId = id();
-        ejecucion.ejecutar(ejecucionId, new byte[0]);
+        ejecucion.ejecutar(ejecucionId, new byte[0], PERFIL_CLAVE);
 
         String ruta = daemon.llamadas.stream().filter(l -> l.contains("/create")).findFirst().orElseThrow();
-        assertTrue(ruta.endsWith("?name=sandbox-" + ejecucionId));
+        assertTrue(ruta.endsWith("?name=sandbox-" + ejecucionId), "ruta de create: " + ruta);
 
-        byte[] enviado = daemon.cuerpos.get(ruta);
-        assertArrayEquals(Spec.crear(ejecucionId), enviado);
+        assertArrayEquals(Golden.bytes(ejecucionId, PERFIL), daemon.cuerpos.get(ruta));
     }
 
     /** R5.7: la respuesta de logs viene chunked y el cliente la reconstruye entera. */
@@ -250,13 +280,13 @@ class EjecucionTest {
     void r57_logsChunkedSeReconstruyeEntero() {
         String largo = "x".repeat(5000);
         daemon.logs = DaemonDePrueba.frame(1, largo);
-        var salida = ejecucion.ejecutar(id(), new byte[0]);
+        var salida = ejecucion.ejecutar(id(), new byte[0], PERFIL_CLAVE);
         assertEquals(largo, salida.stdout());
     }
 
     @Test
     void pingContraElDaemon() {
-        assertTrue(cliente.ping());
+        assertTrue(docker.ping());
     }
 
     // ------------------------------------------------------------------ seccion 13.6
@@ -270,14 +300,14 @@ class EjecucionTest {
         // reves. Por eso el dato no se infiere del exitCode: aca el exit es 0 y el oom es true.
         daemon.exitCode = 0;
 
-        var salida = ejecucion.ejecutar(id(), new byte[0]);
+        var salida = ejecucion.ejecutar(id(), new byte[0], PERFIL_CLAVE);
 
         assertTrue(salida.oomKilled());
         assertEquals(Ejecucion.Estado.COMPLETADA, salida.resultado());
         assertEquals(0, salida.exitCode());
         // R5.10: el inspect va despues del wait y antes del delete.
         assertTrue(indiceDe("/wait") < indiceDe("/contenedor-de-prueba/json"));
-        assertTrue(indiceDe("/contenedor-de-prueba/json") < indiceDe("?force=1"));
+        assertTrue(indiceDe("/contenedor-de-prueba/json") < indiceDe("force=true"));
     }
 
     /** A31 (C2): si el inspect falla, se devuelve oomKilled=false y el resto del resultado intacto. */
@@ -288,7 +318,7 @@ class EjecucionTest {
         daemon.exitCode = 7;
         daemon.logs = DaemonDePrueba.frame(1, "salida normal\n");
 
-        var salida = ejecucion.ejecutar(id(), new byte[0]);
+        var salida = ejecucion.ejecutar(id(), new byte[0], PERFIL_CLAVE);
 
         assertFalse(salida.oomKilled());
         assertEquals(Ejecucion.Estado.COMPLETADA, salida.resultado(), "un dato de diagnostico no puede tirar el resultado");
@@ -303,25 +333,29 @@ class EjecucionTest {
         daemon.demoraWaitMs = Constantes.TIMEOUT_EJECUCION_MS * 2;
         daemon.oomKilled = true;
 
-        var salida = ejecucion.ejecutar(id(), new byte[0]);
+        var salida = ejecucion.ejecutar(id(), new byte[0], PERFIL_CLAVE);
 
         assertEquals(Ejecucion.Estado.TIMEOUT, salida.resultado());
         assertTrue(salida.oomKilled(), "un contenedor matado por memoria que ademas llego al reloj es un caso real");
     }
 
     /**
-     * A33 (C3): un contenedor que arranca y no consume stdin. Sin el tope de R8.5 la escritura del
-     * paso 4 queda bloqueada para siempre y el cupo de concurrencia no se libera nunca; el bug es
-     * invisible porque la suite queda verde y el ejecutor se traba en produccion.
+     * A33 (C3): un contenedor que arranca y no consume stdin.
+     *
+     * Con docker-java el bucle de escritura lo maneja la libreria, en un hilo suyo, y queda trabado
+     * en un write que no se puede interrumpir. El tope de R8.5 vive entonces en el llamador: al
+     * vencerse cierra el canal adjunto entero y la escritura revienta. Sin eso el cupo de
+     * concurrencia no se libera nunca y el bug es invisible, porque la suite queda verde y el que se
+     * traba es el ejecutor en produccion.
      */
     @Test
-    @Timeout(180)
+    @Timeout(240)
     void a33_laEscrituraQueNoAvanzaNoRetieneElCupo() {
         daemon.consumeStdin = false;
-        byte[] bundleGrande = new byte[Constantes.MAX_BUNDLE_BYTES];   // muy por encima del buffer del pipe
+        byte[] bundleGrande = new byte[Constantes.MAX_BUNDLE_BYTES];   // muy por encima del buffer del socket
 
         long comienzo = System.nanoTime();
-        var salida = ejecucion.ejecutar(id(), bundleGrande);
+        var salida = ejecucion.ejecutar(id(), bundleGrande, PERFIL_CLAVE);
         long duracionMs = (System.nanoTime() - comienzo) / 1_000_000;
 
         assertEquals(Ejecucion.Estado.TIMEOUT, salida.resultado());
@@ -344,27 +378,24 @@ class EjecucionTest {
 
     /**
      * Corre una ejecucion en la que el daemon arma los logs con el nonce real, leyendolo del stdin
-     * que acaba de recibir: es lo que hace el entrypoint de la imagen en produccion.
+     * que acaba de recibir: es lo que hace la capa 1 en produccion.
      */
     private Ejecucion.Salida ejecutarConReporte(String contenido, String... ruidoPrevio) throws Exception {
         DaemonDePrueba d = daemon;
-        Thread armador = new Thread(() -> {
-            while (d.stdinRecibido == null) Thread.onSpinWait();
-            String nonce = new String(d.stdinRecibido, StandardCharsets.UTF_8).substring(0, 32);
-            StringBuilder salida = new StringBuilder("antes\n");
-            for (String r : ruidoPrevio) salida.append(r);
-            salida.append("---SANDBOX-").append(nonce).append("-INICIO---\n")
-                  .append(contenido).append('\n')
-                  .append("---SANDBOX-").append(nonce).append("-FIN---\n")
-                  .append("despues\n");
-            d.logs = DaemonDePrueba.frame(1, salida.toString());
-        });
-        armador.setDaemon(true);
-        armador.start();
-
-        daemon.demoraWaitMs = 300;   // le da tiempo al armador antes de que se pidan los logs
-        Ejecucion.Salida salida = ejecucion.ejecutar(id(), new byte[0]);
-        armador.join(1000);
-        return salida;
+        // El hook corre en el hilo del daemon al cerrarse el canal adjunto, o sea antes del /logs.
+        // Antes esto era un hilo aparte girando sobre stdinRecibido, mas un demoraWaitMs de 300 ms en
+        // el wait para darle ventaja; bajo la suite completa esa ventaja no siempre alcanzaba y el
+        // reporte llegaba nulo. El orden de las llamadas ya da el sincronismo: no hace falta apostar.
+        d.alRecibirStdin = stdin -> {
+            String nonce = new String(stdin, StandardCharsets.UTF_8).substring(0, 32);
+            StringBuilder texto = new StringBuilder("antes\n");
+            for (String r : ruidoPrevio) texto.append(r);
+            texto.append("---SANDBOX-").append(nonce).append("-INICIO---\n")
+                 .append(contenido).append('\n')
+                 .append("---SANDBOX-").append(nonce).append("-FIN---\n")
+                 .append("despues\n");
+            d.logs = DaemonDePrueba.frame(1, texto.toString());
+        };
+        return ejecucion.ejecutar(id(), new byte[0], PERFIL_CLAVE);
     }
 }

@@ -1,0 +1,11 @@
+{
+  "perfilId": "test-busybox",
+  "version": 1,
+  "imagen": "sandbox-runner:1.0.0",
+  "script": "#!/bin/sh\n# guion de juguete de la capa 2: compilación\necho hola\n",
+  "reportFormat": "junit-xml",
+  "limites": {
+    "memoriaMb": 512,
+    "cpuS": 20
+  }
+}

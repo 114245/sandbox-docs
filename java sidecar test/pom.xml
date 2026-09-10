@@ -16,6 +16,10 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <jackson.version>2.17.2</jackson.version>
     <junit.version>5.10.2</junit.version>
+    <dockerjava.version>3.4.1</dockerjava.version>
+    <!-- Ya llega transitivo via docker-java-core; se fija la misma version para el uso directo
+         que hace BundlesIT al armar y leer tars (Paso 4 del handoff). -->
+    <commons-compress.version>1.21</commons-compress.version>
   </properties>
 
   <dependencies>
@@ -24,10 +28,32 @@
       <artifactId>jackson-databind</artifactId>
       <version>${jackson.version}</version>
     </dependency>
+    <!--
+      docker-java: reemplaza al cliente HTTP a mano (ClienteDocker + Http + Demultiplexor).
+      El transporte httpclient5 es el que habla named pipe en Windows; sin el, el ejecutor Java
+      no puede hablar con Docker Desktop y hay que correrlo adentro de un contenedor.
+    -->
+    <dependency>
+      <groupId>com.github.docker-java</groupId>
+      <artifactId>docker-java-core</artifactId>
+      <version>${dockerjava.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.github.docker-java</groupId>
+      <artifactId>docker-java-transport-httpclient5</artifactId>
+      <version>${dockerjava.version}</version>
+    </dependency>
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
       <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <!-- BundlesIT arma los tars de los bundles y lee el tar.gz del buzon a mano (Paso 4). -->
+    <dependency>
+      <groupId>org.apache.commons</groupId>
+      <artifactId>commons-compress</artifactId>
+      <version>${commons-compress.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>

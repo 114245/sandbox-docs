@@ -23,6 +23,12 @@ class ServidorTest {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
+    /** El catalogo de esta suite: un solo perfil, la misma clave que manda ClienteHttpDePrueba por defecto. */
+    private static final Catalogo CATALOGO = Catalogo.deUnSolo(Catalogo.Perfil.armar(
+            "perfil-prueba", 1, "sandbox-runner:prueba",
+            "#!/bin/sh\necho prueba\n".getBytes(java.nio.charset.StandardCharsets.UTF_8),
+            "junit-xml", 512, 20));
+
     /** Motor de mentira: no toca Docker, y puede quedarse trabado a pedido para llenar la cola. */
     private static final class MotorDePrueba implements Motor {
         final CountDownLatch soltar = new CountDownLatch(1);
@@ -32,7 +38,7 @@ class ServidorTest {
         volatile boolean limpiado = false;
 
         @Override
-        public Ejecucion.Salida ejecutar(String id, byte[] tar) {
+        public Ejecucion.Salida ejecutar(String id, byte[] tar, String perfilClave) {
             enEjecucion.incrementAndGet();
             try {
                 if (bloquear) soltar.await();
@@ -42,7 +48,8 @@ class ServidorTest {
                 enEjecucion.decrementAndGet();
             }
             return new Ejecucion.Salida(id, Ejecucion.Estado.COMPLETADA, 0, false, 12,
-                    "salida", "", "<testsuite/>", false, false);
+                    "salida", "", "<testsuite/>", false, false,
+                    "perfil-prueba", 1, "hash-de-prueba");
         }
 
         @Override public boolean daemonVivo() { return daemonVivo; }
@@ -62,7 +69,7 @@ class ServidorTest {
         rutaSocket = directorio.resolve("e.sock").toString();
         motor = new MotorDePrueba();
         hilos = Executors.newVirtualThreadPerTaskExecutor();
-        servidor = new Servidor(rutaSocket, motor, hilos);
+        servidor = new Servidor(rutaSocket, motor, CATALOGO, hilos);
         hilos.submit(servidor::atender);
         cliente = new ClienteHttpDePrueba(rutaSocket);
     }
@@ -97,15 +104,17 @@ class ServidorTest {
     /**
      * La serializacion de la respuesta se apoya en que Jackson emite los componentes del record
      * en orden de declaracion. Este test fija ese contrato: los diez campos de la seccion 3.1,
-     * en ese orden, con los nulos presentes en vez de omitidos.
+     * en ese orden, con los nulos presentes en vez de omitidos, EXTENDIDO (Paso 2 del handoff) con
+     * perfilId/perfilVersion/perfilHash del catalogo de perfiles al final.
      */
     @Test
     void laRespuestaTieneLosCamposDeLaSeccion3EnOrden() {
         var timeout = new Ejecucion.Salida("una-id", Ejecucion.Estado.TIMEOUT, null, true, 60001,
-                "parcial", "", null, true, true);
+                "parcial", "", null, true, true, null, null, null);
         assertEquals("{\"ejecucionId\":\"una-id\",\"resultado\":\"TIMEOUT\",\"exitCode\":null,"
                 + "\"oomKilled\":true,\"duracionMs\":60001,\"stdout\":\"parcial\",\"stderr\":\"\","
-                + "\"reporte\":null,\"reporteAusente\":true,\"salidaTruncada\":true}", Servidor.json(timeout));
+                + "\"reporte\":null,\"reporteAusente\":true,\"salidaTruncada\":true,"
+                + "\"perfilId\":null,\"perfilVersion\":null,\"perfilHash\":null}", Servidor.json(timeout));
     }
 
     @Test
@@ -113,14 +122,14 @@ class ServidorTest {
         Servidor otro = null;
         try {
             Motor caido = new Motor() {
-                @Override public Ejecucion.Salida ejecutar(String id, byte[] tar) {
+                @Override public Ejecucion.Salida ejecutar(String id, byte[] tar, String perfilClave) {
                     return Ejecucion.Salida.errorDaemon(id, 3);
                 }
                 @Override public boolean daemonVivo() { return false; }
                 @Override public void limpiarEnVuelo() {}
             };
             String ruta = directorio.resolve("d.sock").toString();
-            otro = new Servidor(ruta, caido, hilos);
+            otro = new Servidor(ruta, caido, CATALOGO, hilos);
             hilos.submit(otro::atender);
 
             var r = new ClienteHttpDePrueba(ruta).ejecutar(id(), new byte[0]);
@@ -147,11 +156,33 @@ class ServidorTest {
         assertEquals(400, cliente.ejecutar("../../containers/otro", new byte[0]).codigo());
     }
 
+    /** Paso 2 del handoff (catalogo de perfiles): X-Perfil ausente o con formato invalido es 400. */
+    @Test
+    void sinPerfilValidoEs400() throws Exception {
+        var sinHeader = cliente.enviar("POST /ejecutar HTTP/1.1\r\nHost: localhost\r\n"
+                + "X-Ejecucion-Id: " + id() + "\r\nContent-Length: 0\r\n\r\n", null);
+        assertEquals(400, sinHeader.codigo());
+
+        var malFormado = cliente.enviar("POST /ejecutar HTTP/1.1\r\nHost: localhost\r\n"
+                + "X-Ejecucion-Id: " + id() + "\r\nX-Perfil: no-tiene-arroba\r\n"
+                + "Content-Length: 0\r\n\r\n", null);
+        assertEquals(400, malFormado.codigo());
+    }
+
+    /** Paso 2 del handoff: header bien formado pero ausente del catalogo es 422. */
+    @Test
+    void perfilDesconocidoEs422() throws Exception {
+        var r = cliente.ejecutar(id(), new byte[0], "no-existe@99");
+        assertEquals(422, r.codigo());
+        assertEquals(0, motor.enEjecucion.get());
+    }
+
     /** Seccion 3.1: no se acepta entrada sin Content-Length. */
     @Test
     void sinContentLengthEs411() throws Exception {
         var r = cliente.enviar("POST /ejecutar HTTP/1.1\r\nHost: localhost\r\n"
                 + "X-Ejecucion-Id: " + id() + "\r\n"
+                + "X-Perfil: " + ClienteHttpDePrueba.PERFIL_POR_DEFECTO + "\r\n"
                 + "Transfer-Encoding: chunked\r\n\r\n", null);
         assertEquals(411, r.codigo());
     }
@@ -165,6 +196,7 @@ class ServidorTest {
     void a27_bundleDemasiadoGrandeEs413SinLeerElCuerpo() throws Exception {
         var r = cliente.enviar("POST /ejecutar HTTP/1.1\r\nHost: localhost\r\n"
                 + "X-Ejecucion-Id: " + id() + "\r\n"
+                + "X-Perfil: " + ClienteHttpDePrueba.PERFIL_POR_DEFECTO + "\r\n"
                 + "Content-Length: " + (Constantes.MAX_BUNDLE_BYTES + 1) + "\r\n\r\n", null);
         assertEquals(413, r.codigo());
         assertEquals(0, motor.enEjecucion.get());

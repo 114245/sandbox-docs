@@ -39,12 +39,16 @@ final class Servidor implements AutoCloseable {
     private static final Pattern UUID_CANONICO =
             Pattern.compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
 
+    /** Formato del header X-Perfil: la misma clave con la que se busca en el catalogo. */
+    private static final Pattern CLAVE_PERFIL = Pattern.compile("^[a-z0-9-]+@[0-9]+$");
+
     /** Admitidos = en vuelo + esperando turno. Por encima del tope, 503 inmediato (R9.2). */
     private static final int MAX_ADMITIDOS = Constantes.MAX_CONCURRENTES + Constantes.MAX_COLA;
 
     private final Path rutaSocket;
     private final ServerSocketChannel escucha;
     private final Motor motor;
+    private final Catalogo catalogo;
     private final ExecutorService hilos;
 
     private final Semaphore turnos = new Semaphore(Constantes.MAX_CONCURRENTES, true);
@@ -52,9 +56,10 @@ final class Servidor implements AutoCloseable {
     private volatile boolean aceptando = true;
     private final java.util.concurrent.atomic.AtomicBoolean cerrando = new java.util.concurrent.atomic.AtomicBoolean();
 
-    Servidor(String rutaSocket, Motor motor, ExecutorService hilos) throws IOException {
+    Servidor(String rutaSocket, Motor motor, Catalogo catalogo, ExecutorService hilos) throws IOException {
         this.rutaSocket = Path.of(rutaSocket);
         this.motor = motor;
+        this.catalogo = catalogo;
         this.hilos = hilos;
 
         Files.deleteIfExists(this.rutaSocket);
@@ -125,6 +130,17 @@ final class Servidor implements AutoCloseable {
             enviar(out, 400, "{\"error\":\"X-Ejecucion-Id ausente o invalido\"}");
             return;
         }
+        // Paso 2 del handoff (catalogo de perfiles): X-Perfil elige el perfil. Formato invalido o
+        // ausente es 400; formato valido pero no presente en el catalogo es 422.
+        String perfilClave = cabeza.header("x-perfil");
+        if (perfilClave == null || !CLAVE_PERFIL.matcher(perfilClave).matches()) {
+            enviar(out, 400, mensaje(id, "X-Perfil ausente o invalido"));
+            return;
+        }
+        if (catalogo.buscar(perfilClave) == null) {
+            enviar(out, 422, mensaje(id, "perfil desconocido: " + perfilClave));
+            return;
+        }
         // R3: no se acepta chunked en la entrada; necesitamos el tamano antes de aceptar bytes.
         String cl = cabeza.header("content-length");
         if (cl == null) {
@@ -159,7 +175,7 @@ final class Servidor implements AutoCloseable {
         }
         try {
             byte[] tar = Http.leerExacto(in, (int) largo);
-            Ejecucion.Salida salida = motor.ejecutar(id, tar);
+            Ejecucion.Salida salida = motor.ejecutar(id, tar, perfilClave);
             int codigo = salida.resultado() == Ejecucion.Estado.ERROR_DAEMON ? 502 : 200;
             enviar(out, codigo, json(salida));
         } finally {
@@ -267,6 +283,7 @@ final class Servidor implements AutoCloseable {
             case 404 -> "Not Found";
             case 411 -> "Length Required";
             case 413 -> "Payload Too Large";
+            case 422 -> "Unprocessable Entity";
             case 502 -> "Bad Gateway";
             case 503 -> "Service Unavailable";
             default -> "Status";

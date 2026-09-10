@@ -35,10 +35,18 @@ final class ClienteHttpDePrueba {
         }
     }
 
+    /** El perfil por defecto que usan los tests que no ejercitan el header X-Perfil en si mismo. */
+    static final String PERFIL_POR_DEFECTO = "perfil-prueba@1";
+
     Respuesta ejecutar(String ejecucionId, byte[] tar) throws IOException {
+        return ejecutar(ejecucionId, tar, PERFIL_POR_DEFECTO);
+    }
+
+    Respuesta ejecutar(String ejecucionId, byte[] tar, String perfilClave) throws IOException {
         return enviar("POST /ejecutar HTTP/1.1\r\n"
                 + "Host: localhost\r\n"
                 + "X-Ejecucion-Id: " + ejecucionId + "\r\n"
+                + "X-Perfil: " + perfilClave + "\r\n"
                 + "Content-Type: application/octet-stream\r\n"
                 + "Content-Length: " + tar.length + "\r\n\r\n", tar);
     }

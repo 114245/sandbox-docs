@@ -6,7 +6,7 @@ package sandbox.ejecutor;
  */
 interface Motor {
 
-    Ejecucion.Salida ejecutar(String ejecucionId, byte[] tar);
+    Ejecucion.Salida ejecutar(String ejecucionId, byte[] tar, String perfilClave);
 
     boolean daemonVivo();
 

@@ -1,15 +1,14 @@
 # A6: el test bloqueante de la seccion 7, contra un daemon de Docker real.
 #
-# Java sobre Windows no puede hablarle al socket del daemon (Docker Desktop lo expone como npipe),
-# asi que la suite corre adentro de un contenedor con /var/run/docker.sock montado. No hace falta
-# instalar nada en WSL.
+# Ya NO hace falta meter la suite adentro de un contenedor. Con docker-java, el transporte
+# httpclient5 habla el named pipe de Docker Desktop, asi que el ejecutor corre nativo en Windows.
+# Docker.conectar elige npipe o unix segun la plataforma; DOCKER_HOST lo pisa si hace falta.
 $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
-# Fixture de A6: busybox con el entrypoint 'read N; tar -tf -'. NO es el runner de produccion.
+# Fixture de A6: busybox con la capa 1 de juguete que verifica el framing de tres documentos.
+# NO es el runner de produccion. Se etiqueta con el mismo tag que Constantes.IMAGEN a proposito:
+# asi el test corre la spec de produccion sin tocar un solo campo.
 docker build -t sandbox-runner:1.0.0 src/test/fixtures/a6
 
-docker run --rm `
-  -v /var/run/docker.sock:/var/run/docker.sock `
-  -v "${PWD}:/app" -v ejecutor-m2:/root/.m2 -w /app `
-  maven:3.9-eclipse-temurin-21 mvn -B test -Dtest=ProtocoloIT
+mvn -B test -Dtest=ProtocoloIT

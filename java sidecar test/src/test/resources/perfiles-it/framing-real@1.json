@@ -1,0 +1,11 @@
+{
+  "perfilId": "framing-real",
+  "version": 1,
+  "imagen": "sandbox-runner:2.0.0-capa1",
+  "script": "#!/bin/sh\n#\n# framing-real@1 -- guion de juguete del Paso 4 del handoff (BundlesIT).\n#\n# No compila nada: sirve para probar el framing de tres documentos y la\n# integridad byte a byte contra la IMAGEN REAL (sandbox-runner:2.0.0-capa1),\n# sin meter una JVM en el medio. Deja en el buzon: el listado completo de lo\n# que llego en $SANDBOX_IN, el nombre del primer archivo (orden alfabetico) y\n# el primer byte de su CONTENIDO -- la costura que le importa al Paso 4 es la\n# que hay entre el guion y el tar, y el primer archivo del tar es lo mas\n# cerca que se puede estar de esa costura una vez que capa1 ya extrajo todo.\nset -u\nfind \"$SANDBOX_IN\" -type f | sort > \"$SANDBOX_REPORTS/listado.txt\"\nprimero=$(sort \"$SANDBOX_REPORTS/listado.txt\" | head -n1)\nif [ -n \"$primero\" ]; then\n  printf '%s' \"$primero\" > \"$SANDBOX_REPORTS/primer-archivo.txt\"\n  head -c 1 \"$primero\" | od -An -tx1 | tr -d ' \\n' > \"$SANDBOX_REPORTS/primer-byte.txt\"\n  wc -c < \"$primero\" | tr -d ' \\n' > \"$SANDBOX_REPORTS/primer-tamano.txt\"\nfi\nexit 0\n",
+  "reportFormat": "texto-libre",
+  "limites": {
+    "memoriaMb": 256,
+    "cpuS": 10
+  }
+}

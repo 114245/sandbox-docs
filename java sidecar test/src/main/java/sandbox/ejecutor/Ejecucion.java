@@ -1,20 +1,9 @@
 package sandbox.ejecutor;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.nio.channels.Channels;
-import java.nio.channels.SocketChannel;
-import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.HexFormat;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /** Los siete pasos de la seccion 5, con limpieza garantizada. */
@@ -22,62 +11,80 @@ final class Ejecucion implements Motor {
 
     enum Estado { COMPLETADA, TIMEOUT, ERROR_DAEMON, RECHAZADA }
 
-    /** Los campos y su orden son los de la seccion 3.1; Jackson los serializa en este mismo orden. */
+    /**
+     * Los campos y su orden son los de la seccion 3.1, mas perfilId/perfilVersion/perfilHash del
+     * catalogo de perfiles AL FINAL (Paso 2 del handoff): asi el test que fija el orden de los diez
+     * campos originales se extiende en vez de reescribirse. Jackson serializa los componentes del
+     * record en este mismo orden.
+     */
     record Salida(String ejecucionId, Estado resultado, Integer exitCode, boolean oomKilled,
                   long duracionMs, String stdout, String stderr, String reporte,
-                  boolean reporteAusente, boolean salidaTruncada) {
+                  boolean reporteAusente, boolean salidaTruncada,
+                  String perfilId, Integer perfilVersion, String perfilHash) {
 
+        /** Rechazada por saturacion, ANTES de elegir contenedor: el perfil todavia no importa. */
         static Salida rechazada(String ejecucionId) {
-            return new Salida(ejecucionId, Estado.RECHAZADA, null, false, 0, "", "", null, true, false);
+            return new Salida(ejecucionId, Estado.RECHAZADA, null, false, 0, "", "", null, true, false,
+                    null, null, null);
         }
 
+        /** El daemon fallo. El perfil pudo haberse resuelto o no; se informa vacio en los dos casos. */
         static Salida errorDaemon(String ejecucionId, long duracionMs) {
-            return new Salida(ejecucionId, Estado.ERROR_DAEMON, null, false, duracionMs, "", "", null, true, false);
+            return new Salida(ejecucionId, Estado.ERROR_DAEMON, null, false, duracionMs, "", "", null, true, false,
+                    null, null, null);
         }
     }
 
     private static final SecureRandom AZAR = new SecureRandom();
 
-    private final ClienteDocker cliente;
-    private final ExecutorService hilos;
-    private final ScheduledExecutorService reloj;
+    private final Docker docker;
+    /**
+     * El catalogo de perfiles (Paso 1 de la Opcion 1). {@code Servidor} ya valido que la clave del
+     * header X-Perfil exista aca antes de admitir el request; esta busqueda no deberia fallar
+     * nunca, pero si lo hace es un error de programacion, no del daemon ni del alumno.
+     */
+    private final Catalogo catalogo;
     /** Contenedores vivos de esta instancia, para el apagado ordenado (R11.7). */
     private final Set<String> enVuelo = ConcurrentHashMap.newKeySet();
 
-    Ejecucion(ClienteDocker cliente, ExecutorService hilos, ScheduledExecutorService reloj) {
-        this.cliente = cliente;
-        this.hilos = hilos;
-        this.reloj = reloj;
+    Ejecucion(Docker docker, Catalogo catalogo) {
+        this.docker = docker;
+        this.catalogo = catalogo;
     }
 
     Set<String> contenedoresEnVuelo() { return enVuelo; }
 
     @Override
-    public boolean daemonVivo() { return cliente.ping(); }
+    public boolean daemonVivo() { return docker.ping(); }
 
     @Override
     public void limpiarEnVuelo() {
-        for (String contenedor : enVuelo) cliente.borrar(contenedor);
+        for (String contenedor : enVuelo) docker.borrar(contenedor);
     }
 
     @Override
-    public Salida ejecutar(String ejecucionId, byte[] tar) {
+    public Salida ejecutar(String ejecucionId, byte[] tar, String perfilClave) {
         long comienzo = System.nanoTime();
         // R7.1: 16 bytes de un generador criptografico, en hexadecimal minuscula.
         String nonce = HexFormat.of().formatHex(azar16());
 
+        Catalogo.Perfil perfil = catalogo.buscar(perfilClave);
+        if (perfil == null) {
+            throw new IllegalStateException("perfil no encontrado en el catalogo: " + perfilClave);
+        }
+
         String contenedor = null;
         try {
-            contenedor = cliente.crear(ejecucionId);            // paso 1
+            contenedor = docker.crear(ejecucionId, perfil);     // paso 1
             enVuelo.add(contenedor);
-            return correr(ejecucionId, contenedor, tar, nonce, comienzo);
+            return correr(ejecucionId, contenedor, tar, nonce, comienzo, perfil);
         } catch (ErrorDaemon e) {
             Log.info("id=%s resultado=ERROR_DAEMON causa=%s", ejecucionId, e.getMessage());
             return Salida.errorDaemon(ejecucionId, msDesde(comienzo));
         } finally {
             // R5.3: el borrado ocurre siempre, tambien ante excepcion.
             if (contenedor != null) {
-                if (!cliente.borrar(contenedor)) {
+                if (!docker.borrar(contenedor)) {
                     Log.info("id=%s delete fallo; queda para el barrido", ejecucionId);
                 }
                 enVuelo.remove(contenedor);
@@ -85,28 +92,41 @@ final class Ejecucion implements Motor {
         }
     }
 
-    private Salida correr(String ejecucionId, String contenedor, byte[] tar, String nonce, long comienzo) {
-        // R5.1: el attach va ANTES del start, o el contenedor puede leer stdin sin nadie del otro lado.
-        SocketChannel entrada = cliente.adjuntarStdin(contenedor);   // paso 2
-        cliente.iniciar(contenedor);                                  // paso 3
-        long arranque = System.nanoTime();                            // R8.1: el reloj arranca aca
+    private Salida correr(String ejecucionId, String contenedor, byte[] tar, String nonce, long comienzo,
+                           Catalogo.Perfil perfil) {
+        Entrada entrada = Entrada.armar(nonce, perfil.script(), tar);
 
-        long escritos = escribirEntrada(entrada, nonce, tar, arranque);   // paso 4
-        boolean cierreCompleto = escritos >= 0;
-        // R8.4: un TIMEOUT es indistinguible de un while(true) y de un half-close mal hecho.
-        Log.info("id=%s stdin_bytes=%d cierre_completo=%s", ejecucionId, Math.abs(escritos), cierreCompleto);
+        // R5.1: el attach va ANTES del start, o el contenedor puede leer stdin sin nadie del otro lado.
+        Docker.Adjunto adjunto = docker.adjuntar(contenedor, entrada);   // paso 2
+        long arranque;
+        boolean entregaCompleta;
+        try {
+            docker.iniciar(contenedor);                                   // paso 3
+            arranque = System.nanoTime();                                 // R8.1: el reloj arranca aca
+
+            // Paso 4. La escritura la maneja la libreria; lo nuestro es el tope (R8.5) y el cierre.
+            entregaCompleta = entrada.esperarEntrega(
+                    Constantes.TIMEOUT_EJECUCION_MS - msDesde(arranque));
+        } finally {
+            // R7.2: el canal se cierra entero, siempre. Con StdinOnce, cerrarlo ES el EOF de stdin
+            // del contenedor; sin esto la capa 1 espera el fin del bundle hasta el reloj de pared.
+            adjunto.close();
+        }
+        // R8.4: un TIMEOUT es indistinguible de un while(true) si no se sabe si stdin llego entero.
+        Log.info("id=%s stdin_bytes=%d/%d entrega_completa=%s",
+                ejecucionId, entrada.servidos(), entrada.total(), entregaCompleta);
 
         Integer exitCode;
         Estado estado;
         long restante = Constantes.TIMEOUT_EJECUCION_MS - msDesde(arranque);
         try {
-            exitCode = esperarConTope(contenedor, Math.max(restante, 0));   // paso 5
+            exitCode = docker.esperar(contenedor, Math.max(restante, 0));   // paso 5
             estado = Estado.COMPLETADA;
         } catch (TimeoutException e) {
             // R8.2: kill, wait corto, y la salida parcial se devuelve igual porque sirve para diagnosticar.
-            cliente.matar(contenedor);
+            docker.matar(contenedor);
             try {
-                esperarConTope(contenedor, Constantes.TIMEOUT_DAEMON_MS);
+                docker.esperar(contenedor, Constantes.TIMEOUT_DAEMON_MS);
             } catch (TimeoutException ignorado) {
                 Log.info("id=%s el contenedor no termino tras el kill", ejecucionId);
             }
@@ -116,10 +136,10 @@ final class Ejecucion implements Motor {
 
         // R5.10: el paso 5b va tambien en TIMEOUT. Un contenedor matado por el limite de memoria
         // que ademas llego al reloj es un caso real.
-        boolean oomKilled = cliente.oomKilled(contenedor);            // paso 5b
+        boolean oomKilled = docker.oomKilled(contenedor);            // paso 5b
 
         // R5.4: los logs se leen antes del delete.
-        var salida = Demultiplexor.demultiplexar(cliente.logs(contenedor));  // paso 6
+        var salida = docker.logs(contenedor);                        // paso 6
 
         // El truncado ocurre antes de extraer el reporte: extraer primero exigiria bufferear el
         // stream sin tope, que es justo lo que R6.7 evita. Si el reporte quedo fuera del millon de
@@ -134,71 +154,8 @@ final class Ejecucion implements Motor {
 
         return new Salida(ejecucionId, estado, exitCode, oomKilled, duracion,
                 extraccion.stdout(), salida.stderr(), extraccion.reporte(),
-                extraccion.ausente(), salida.truncada());
-    }
-
-    /**
-     * Paso 4: primero el nonce como primera linea, despues el tar, y se cierra entero (R7.2).
-     * El nonce no viaja por variable de entorno ni por archivo (R7.3): /proc/1/environ lo devolveria
-     * aunque el entrypoint hiciera unset.
-     *
-     * R8.5: la escritura lleva su propio tope. Si el contenedor no consume stdin, el buffer del pipe
-     * se llena a las pocas decenas de KiB y esto queda bloqueado para siempre; el reloj del paso 5
-     * todavia no se esta evaluando, asi que sin el tope el cupo de concurrencia no se libera nunca.
-     * El tope es lo que queda del reloj de ejecucion: la spec no define una constante propia, y
-     * acotar por el mismo presupuesto deja al paso 5 resolviendo en TIMEOUT sin margen extra.
-     *
-     * @return bytes escritos; negativo si el cierre no se completo.
-     */
-    private long escribirEntrada(SocketChannel canal, String nonce, byte[] tar, long arranque) {
-        byte[] cabecera = (nonce + "\n").getBytes(StandardCharsets.US_ASCII);
-        long total = (long) cabecera.length + tar.length;
-        long tope = Math.max(Constantes.TIMEOUT_EJECUCION_MS - msDesde(arranque), 1);
-        ScheduledFuture<?> watchdog = reloj.schedule(() -> cerrar(canal), tope, TimeUnit.MILLISECONDS);
-        try (canal) {
-            OutputStream out = Channels.newOutputStream(canal);
-            out.write(cabecera);
-            out.write(tar);
-            out.flush();
-            canal.shutdownOutput();
-            return total;
-        } catch (IOException e) {
-            // Un fallo aca no aborta la ejecucion: el contenedor arranco igual y va a morir por su
-            // cuenta o por timeout. Lo que importa es que quede registrado (R8.4, R8.5).
-            return -total;
-        } finally {
-            watchdog.cancel(false);
-        }
-    }
-
-    private static void cerrar(SocketChannel canal) {
-        try {
-            canal.close();
-        } catch (IOException ignorado) {
-            // cerrarlo es justamente lo que queriamos; que ademas falle no cambia nada
-        }
-    }
-
-    /**
-     * Corre el wait en otro hilo para poder distinguir un vencimiento del reloj de ejecucion
-     * de un fallo del daemon. La llamada que queda colgada la cierra su propio watchdog.
-     */
-    private int esperarConTope(String contenedor, long topeMs) throws TimeoutException {
-        Future<Integer> tarea = hilos.submit(
-                () -> cliente.esperar(contenedor, topeMs + Constantes.TIMEOUT_DAEMON_MS));
-        try {
-            return tarea.get(topeMs, TimeUnit.MILLISECONDS);
-        } catch (TimeoutException e) {
-            tarea.cancel(true);
-            throw e;
-        } catch (InterruptedException e) {
-            tarea.cancel(true);
-            Thread.currentThread().interrupt();
-            throw new ErrorDaemon("espera interrumpida");
-        } catch (ExecutionException e) {
-            if (e.getCause() instanceof ErrorDaemon daemon) throw daemon;
-            throw new ErrorDaemon("wait fallo");
-        }
+                extraccion.ausente(), salida.truncada(),
+                perfil.perfilId(), perfil.version(), perfil.scriptHash());
     }
 
     private static byte[] azar16() {

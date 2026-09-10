@@ -6,14 +6,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -22,74 +21,133 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * A6: el test que valida la seccion 7 contra un daemon de Docker real.
  *
  * La spec dice que si este test falla, la seccion 7 hay que rediseniarla y esto bloquea todo lo
- * demas. El mecanismo del nonce depende de que `read`, en el shell del entrypoint, no consuma mas
- * que la primera linea del descriptor y le deje el resto del stream a tar.
+ * demas. Con el framing de tres documentos son cuatro hipotesis, no una: que `read` no consuma mas
+ * que su linea (dos veces), que `dd iflag=fullblock` lea exactamente los N bytes del guion sin
+ * comerse nada del tar, y que el tar llegue entero detras.
  *
- * Requiere el socket del daemon y la imagen fixture. Sin eso se saltea, para que la suite siga
- * verde donde no hay Docker (por ejemplo, Windows nativo).
+ * <b>Corre nativo en Windows.</b> Antes hacia falta meter la suite adentro de un contenedor con el
+ * socket montado, porque Java no podia hablarle al named pipe de Docker Desktop. El transporte
+ * httpclient5 de docker-java si lo habla: {@link Docker#conectar} resuelve npipe o unix segun la
+ * plataforma. Si no hay daemon, el test se saltea.
  */
 class ProtocoloIT {
 
-    private static final Path SOCKET_DAEMON = Path.of("/var/run/docker.sock");
+    /**
+     * El guion de la capa 2 del fixture. Lleva un acento a proposito: si el largo se contara en
+     * caracteres en vez de bytes, el `dd` del fixture leeria uno de menos y se comeria el primer
+     * byte del tar. Es el bug que este test tiene que ver.
+     *
+     * Vive en src/test/resources/perfiles-it/test-busybox@1.json, byte a byte igual a esta
+     * constante -se comparan mas abajo, en levantar()-, y es la TRAMPA que el handoff pedia
+     * resolver: la imagen de este perfil de prueba sigue apuntando a sandbox-runner:1.0.0 -el
+     * fixture de busybox-, que era Constantes.IMAGEN antes de que la imagen pasara a salir del
+     * catalogo de perfiles.
+     */
+    private static final byte[] GUION =
+            "#!/bin/sh\n# guion de juguete de la capa 2: compilación\necho hola\n"
+                    .getBytes(StandardCharsets.UTF_8);
 
-    private ScheduledExecutorService reloj;
-    private ExecutorService hilos;
+    private Docker docker;
     private Ejecucion ejecucion;
 
     @BeforeEach
-    void levantar() {
-        assumeTrue(Files.exists(SOCKET_DAEMON),
-                "sin /var/run/docker.sock: correr con scripts/verificar-a6.ps1");
-        reloj = Executors.newScheduledThreadPool(2);
-        hilos = Executors.newVirtualThreadPerTaskExecutor();
-        ejecucion = new Ejecucion(new ClienteDocker(SOCKET_DAEMON.toString(), reloj), hilos, reloj);
+    void levantar() throws IOException, URISyntaxException {
+        Docker candidato;
+        try {
+            candidato = Docker.conectar(dockerHost());
+            assumeTrue(candidato.ping(), "no hay daemon de Docker escuchando; el test se saltea");
+        } catch (RuntimeException e) {
+            org.junit.jupiter.api.Assumptions.abort("no se pudo abrir el transporte a Docker: " + e);
+            return;
+        }
+        docker = candidato;
+        Catalogo catalogo = Catalogo.cargar(directorioPerfilesDePrueba());
+        Catalogo.Perfil perfil = catalogo.buscar("test-busybox@1");
+        assertArrayEquals(GUION, perfil.script(),
+                "el perfil de prueba de test resources se desincronizo de GUION");
+        ejecucion = new Ejecucion(docker, catalogo);
+    }
+
+    private static Path directorioPerfilesDePrueba() throws URISyntaxException {
+        return Path.of(ProtocoloIT.class.getResource("/perfiles-it").toURI());
     }
 
     @AfterEach
-    void bajar() {
-        if (reloj != null) reloj.shutdownNow();
-        if (hilos != null) hilos.shutdownNow();
+    void bajar() throws Exception {
+        if (docker != null) docker.close();
+    }
+
+    private static String dockerHost() {
+        String env = System.getenv("DOCKER_HOST");
+        if (env != null && !env.isBlank()) return env;
+        return System.getProperty("os.name", "").toLowerCase().contains("windows")
+                ? "npipe:////./pipe/docker_engine"
+                : "unix:///var/run/docker.sock";
     }
 
     /**
      * A6. Se corre la spec de produccion sin tocar un solo campo; lo unico distinto es que
-     * sandbox-runner:1.0.0 apunta al fixture de busybox en vez de al runner con la JVM.
+     * {@code sandbox-runner:1.0.0} apunta al fixture de busybox en vez de al runner con la JVM.
      */
     @Test
-    @Timeout(120)
-    void a6_elNonceViajaPorStdinYElTarLlegaEntero() {
+    @Timeout(180)
+    void a6_losTresDocumentosLleganEnterosYEnOrden() {
         List<String> entradas = List.of("Solucion.java", "pom.xml", "src/test/SolucionTest.java");
         byte[] tar = tarConEntradas(entradas);
 
-        var salida = ejecucion.ejecutar(UUID.randomUUID().toString(), tar);
+        var salida = ejecucion.ejecutar(UUID.randomUUID().toString(), tar, "test-busybox@1");
 
         assertEquals(Ejecucion.Estado.COMPLETADA, salida.resultado(),
                 "stderr del contenedor: " + salida.stderr());
         assertEquals(0, salida.exitCode(), "stderr del contenedor: " + salida.stderr());
 
         // 1) `read` leyo la primera linea entera y nada mas: el eco trae el nonce completo.
-        var eco = java.util.regex.Pattern.compile("FIN ([0-9a-f]{32})").matcher(salida.stdout());
-        assertTrue(eco.find(), "el entrypoint no imprimio 'FIN <nonce>'; stdout: " + salida.stdout());
+        var eco = Pattern.compile("FIN ([0-9a-f]{32})").matcher(salida.stdout());
+        assertTrue(eco.find(), "la capa 1 no imprimio 'FIN <nonce>'; stdout: " + salida.stdout());
         String nonce = eco.group(1);
 
-        // 2) A tar le quedo el resto del stream intacto: lista las tres entradas.
+        // 2) `read` de la segunda linea tampoco se paso, y `dd` leyo exactamente N bytes.
+        assertTrue(salida.stdout().contains("GUION " + GUION.length + " de " + GUION.length),
+                "el guion no llego completo o llego de mas; stdout: " + salida.stdout());
+
         assertFalse(salida.reporteAusente(), "el bloque de reporte no aparecio");
+        String reporte = salida.reporte();
+
+        // 3) El guion viajo byte a byte, con el acento intacto.
+        assertTrue(reporte.contains("compilación"),
+                "el guion llego corrupto: el largo se conto en caracteres, no en bytes");
+
+        // 4) Al tar le quedo el resto del stream, entero y sin decapitar.
+        assertTrue(reporte.contains("TAR " + tar.length),
+                "el tar llego con otro tamanio; alguien se comio bytes del stream: " + reporte);
         for (String entrada : entradas) {
-            assertTrue(salida.reporte().contains(entrada),
-                    "falta " + entrada + " en el listado: " + salida.reporte());
+            assertTrue(reporte.contains(entrada), "falta " + entrada + " en el listado: " + reporte);
         }
 
-        // 3) El bloque salio de stdout, y el nonce que el ejecutor uso para extraerlo es el mismo
-        //    que el entrypoint leyo de stdin.
+        // 5) El bloque salio de stdout, y el nonce que el ejecutor uso para extraerlo es el mismo
+        //    que la capa 1 leyo de stdin.
         assertFalse(salida.stdout().contains("---SANDBOX-" + nonce + "-INICIO---"));
         assertFalse(salida.stdout().contains(entradas.get(0)));
     }
 
+    /**
+     * El cierre del canal adjunto llega como EOF. Es lo que docker-java NO hace solo: su escritor
+     * vacia el stream y deja la conexion abierta. El fixture hace `cat > archivo`, que sin EOF no
+     * vuelve nunca; si esto termina en COMPLETADA y no en TIMEOUT, el EOF llego.
+     */
+    @Test
+    @Timeout(180)
+    void elCierreDelCanalAdjuntoEsElEofDelContenedor() {
+        var salida = ejecucion.ejecutar(UUID.randomUUID().toString(), tarConEntradas(List.of("a.txt")), "test-busybox@1");
+        assertEquals(Ejecucion.Estado.COMPLETADA, salida.resultado(),
+                "sin EOF la capa 1 se cuelga en el cat del bundle hasta el reloj de pared");
+    }
+
     /** Que el contenedor termine borrado, por la via normal (I6). */
     @Test
-    @Timeout(120)
+    @Timeout(180)
     void i6_noQuedanContenedoresDeEstaEjecucion() {
-        ejecucion.ejecutar(UUID.randomUUID().toString(), tarConEntradas(List.of("a.txt")));
+        ejecucion.ejecutar(UUID.randomUUID().toString(), tarConEntradas(List.of("a.txt")), "test-busybox@1");
         assertTrue(ejecucion.contenedoresEnVuelo().isEmpty());
     }
 
