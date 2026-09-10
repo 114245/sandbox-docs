@@ -40,7 +40,7 @@ class ProtocoloIT {
      * Vive en src/test/resources/perfiles-it/test-busybox@1.json, byte a byte igual a esta
      * constante -se comparan mas abajo, en levantar()-, y es la TRAMPA que el handoff pedia
      * resolver: la imagen de este perfil de prueba sigue apuntando a sandbox-runner:1.0.0 -el
-     * fixture de busybox-, que era Constantes.IMAGEN antes de que la imagen pasara a salir del
+     * fixture de busybox-, que era la imagen fija del ejecutor antes de que pasara a salir del
      * catalogo de perfiles.
      */
     private static final byte[] GUION =

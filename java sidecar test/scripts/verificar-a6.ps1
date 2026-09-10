@@ -7,8 +7,9 @@ $ErrorActionPreference = "Stop"
 Set-Location (Split-Path $PSScriptRoot -Parent)
 
 # Fixture de A6: busybox con la capa 1 de juguete que verifica el framing de tres documentos.
-# NO es el runner de produccion. Se etiqueta con el mismo tag que Constantes.IMAGEN a proposito:
-# asi el test corre la spec de produccion sin tocar un solo campo.
+# NO es el runner de produccion. Se etiqueta con sandbox-runner:1.0.0 a proposito: es la imagen
+# que declara el perfil de prueba test-busybox@1, asi el test corre la spec de produccion entera
+# sin tocar un solo campo.
 docker build -t sandbox-runner:1.0.0 src/test/fixtures/a6
 
 mvn -B test -Dtest=ProtocoloIT

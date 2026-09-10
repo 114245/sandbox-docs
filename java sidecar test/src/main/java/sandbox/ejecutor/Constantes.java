@@ -17,16 +17,6 @@ final class Constantes {
     static final String VERSION_API_DOCKER = "v1.43";
 
     /**
-     * Tag y nombre de la imagen del runner de referencia (linea de base, pre-catalogo).
-     * Desde el catalogo de perfiles (Paso 1 del handoff), la imagen del contenedor ya NO sale de
-     * esta constante: sale del campo `imagen` del perfil que elige el header X-Perfil. Se conserva
-     * como referencia y como default de fixtures de test (ProtocoloIT sigue corriendo contra
-     * sandbox-runner:1.0.0, ver el perfil de prueba en src/test/resources).
-     */
-    static final String TAG_IMAGEN = "1.0.0";
-    static final String IMAGEN     = "sandbox-runner:" + TAG_IMAGEN;
-
-    /**
      * Techo duro de memoria de un perfil del catalogo (Paso 1). Ningun perfil puede declarar mas:
      * es la validacion que hace fallar el ARRANQUE, no una ejecucion individual.
      */

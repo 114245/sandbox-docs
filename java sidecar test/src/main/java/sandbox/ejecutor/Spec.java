@@ -83,7 +83,7 @@ final class Spec {
 
         return cmd
                 .withName(nombre(ejecucionId))
-                // Variable (Paso 2): la imagen sale del perfil, no de Constantes.IMAGEN.
+                // Variable (Paso 2): la imagen sale del perfil elegido, no de una constante.
                 .withImage(perfil.imagen())
                 .withEntrypoint(Constantes.ENTRYPOINT)
                 .withCmd(List.of())
