@@ -37,9 +37,16 @@ DIR_TEST="$SANDBOX_TMP/classes/test"
 
 # Los relojes del perfil. En el modelo real estos salen de `limits` del perfil;
 # aca van literales porque el script ES el perfil.
-TIMEOUT_COMPILE_S=20     # reloj de PLATAFORMA: compilar no se le cobra al alumno
+#
+# INVARIANTE (nadie la valida, se sostiene a mano): las fases corren en serie
+# adentro del backstop de la capa 1, asi que
+#     2 * TIMEOUT_COMPILE_S + TIMEOUT_TESTS_S + margen <= SANDBOX_EVAL_TIMEOUT_S (45)
+#     8 + 8 + 25 = 41, margen 4 s.
+# Si no se cumple, una entrega lenta pero legitima muere por el backstop de la
+# capa 1 (TIMEOUT_PARED, 27) antes de que esta capa pueda emitir 42 o 45.
+TIMEOUT_COMPILE_S=8      # reloj de PLATAFORMA: compilar no se le cobra al alumno
 CPU_TESTS_S=10           # reloj del ALUMNO, en tiempo de CPU
-TIMEOUT_TESTS_S=30       # backstop de pared, para el que duerme en vez de quemar CPU
+TIMEOUT_TESTS_S=25       # backstop de pared, para el que duerme en vez de quemar CPU
 
 mkdir -p "$DIR_SOL" "$DIR_TEST"
 

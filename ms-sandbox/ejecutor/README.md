@@ -78,7 +78,7 @@ criterio que ya tenía `Main` con el guion único de antes):
 `Image`, `Memory`, `MemorySwap` y `Ulimits[cpu]`—; todo lo demás sigue constante entre ejecuciones,
 sea cual sea el perfil. `SpecTest#p1_dosPerfilesDifierenSoloEnLosCuatroCamposVariables` es el test
 que lo prueba, y reemplaza al golden fijo único: ahora el golden (`spec-create-referencia.json`) es
-del perfil de referencia `java21-junit@3` puntualmente.
+del perfil de referencia `java21-junit@4` puntualmente.
 
 `Servidor` valida el header `X-Perfil` (`^[a-z0-9-]+@[0-9]+$`) después de `X-Ejecucion-Id` y antes
 de `Content-Length`: **400** si falta o el formato es inválido, **422** si el formato es válido pero
@@ -210,7 +210,7 @@ API en todas las rutas (R5.0), el tar viaja opaco (I7), que el nonce no se filtr
 
 `BundlesIT` corre contra `sandbox-runner:2.0.0-capa1` (la imagen real de dos capas, 755 MB), **no**
 el fixture de busybox que usa `ProtocoloIT`. Usa dos catálogos de perfiles: `perfiles/` (producción,
-`java21-junit@3`) para los nueve bundles, y un perfil de juguete propio,
+`java21-junit@4`) para los nueve bundles, y un perfil de juguete propio,
 `src/test/resources/perfiles-it/framing-real@1.json`, para el framing y la integridad byte a byte —
 ese perfil no compila nada, así que separa "¿llegaron los bytes?" de "¿se comportó bien la
 evaluación?".
@@ -292,7 +292,7 @@ Una sola corrida verde no prueba que una intermitencia se fue. La evidencia acep
 
 - **`TAG_FIJO`.** Resuelto por el catálogo de perfiles: la imagen ya no sale de `Constantes.IMAGEN`
   (que se conserva como referencia histórica y como default de fixtures de test), sino del campo
-  `imagen` del perfil que elige `X-Perfil`. El perfil de referencia `java21-junit@3` apunta a
+  `imagen` del perfil que elige `X-Perfil`. El perfil de referencia `java21-junit@4` apunta a
   `sandbox-runner:2.0.0-capa1`.
 - **`X-Ejecucion-Id`.** Se valida contra el UUID canónico estricto. No es cosmética: el id se
   concatena en la URL de `create` como nombre del contenedor.
@@ -320,7 +320,7 @@ Una sola corrida verde no prueba que una intermitencia se fue. La evidencia acep
 5. **El fat jar de 21 MB.** Podar las dependencias que `docker-java-core` arrastra y no usamos.
 6. **R14.1**: falta la revisión línea por línea por dos personas que no escribieron el código.
 7. ~~Paso 4 del handoff~~ **hecho** (10/09): `BundlesIT`, contra `sandbox-runner:2.0.0-capa1` real,
-   con los nueve bundles de `pruebas/bundles/` y el perfil de producción `java21-junit@3`.
+   con los nueve bundles de `pruebas/bundles/` y el perfil de producción `java21-junit@4`.
    Ver «Paso 4 del handoff — validado contra Docker real» arriba. Cero divergencias contra la tabla
    de `../../HANDOFF-opcion1.md` §6, y `hostil-paquete`/`hostil-red` quedaron confirmados por primera
    vez a través del ejecutor (antes solo habían corrido con `run.sh`).

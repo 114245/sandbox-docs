@@ -32,7 +32,7 @@ cd pruebas && ./probar-capa1.sh bundles/ok-suma ../perfiles/java21-junit.sh
 
 ## Acoplamientos manuales — no hay validación automática que los una
 
-- `perfiles/java21-junit@3.json`, campo `script`: tiene que ser el contenido de
+- `perfiles/java21-junit@4.json`, campo `script`: tiene que ser el contenido de
   `perfiles/java21-junit.sh` **byte a byte**, escapado como string JSON. Si se edita el `.sh`, hay
   que regenerar el campo a mano.
 - `Constantes.ENTRYPOINT` (en `ejecutor/`) tiene que coincidir con el `ENTRYPOINT` de

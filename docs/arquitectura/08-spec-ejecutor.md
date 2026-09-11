@@ -228,7 +228,7 @@ campos que salen del perfil (§4.4) y que están marcados uno por uno abajo.
 > ser exacto en vez de tranquilizador: **el que llama no escribe ninguno de esos cuatro valores,
 > los elige de un conjunto cerrado que escribimos nosotros**. La diferencia es la que hay entre un
 > menú y un formulario. Un request no puede pedir 8 GiB de memoria; puede pedir el perfil
-> `java21-junit@3`, y qué significa eso lo decidió un archivo versionado en nuestro repo, revisado
+> `java21-junit@4`, y qué significa eso lo decidió un archivo versionado en nuestro repo, revisado
 > como se revisa código. §4.4 explica por qué eso conserva la propiedad que importa, y
 > `SpecTest#p1_dosPerfilesDifierenSoloEnLosCuatroCamposVariables` es el test que lo prueba: dos
 > perfiles cualesquiera producen un `create` idéntico salvo esos cuatro campos.
@@ -666,7 +666,7 @@ pérdida real, no como test que pasa.
 
 > **A1 y el catálogo (C7).** El golden fijo único dejó de tener sentido en el momento en que hay
 > más de un perfil: ahora `spec-create-referencia.json` es el golden **del perfil de referencia**
-> `java21-junit@3`, y lo que cubre la generalidad es A34 (R4.6), que compara dos perfiles distintos
+> `java21-junit@4`, y lo que cubre la generalidad es A34 (R4.6), que compara dos perfiles distintos
 > entre sí. El par es más fuerte que el golden solo: uno fija los bytes exactos de un caso, el otro
 > fija que **el conjunto de lo que puede variar es cerrado**.
 

@@ -23,7 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * Paso 2 del handoff (catalogo de perfiles): el golden ahora es POR PERFIL. La referencia se
  * regenero con el perfil de referencia de abajo ({@link #PERFIL_REFERENCIA}), que es el mismo
- * java21-junit@3 del catalogo real salvo por el contenido del guion, que no toca la spec del
+ * java21-junit@4 del catalogo real salvo por el contenido del guion, que no toca la spec del
  * contenedor (el guion viaja por stdin, no por ningun campo de create).
  */
 class SpecTest {

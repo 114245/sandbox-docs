@@ -34,7 +34,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * <p>{@code ProtocoloIT} corre contra {@code sandbox-runner:1.0.0}, que es un fixture de busybox
  * re-etiquetado -- nunca toco la imagen de produccion. Esta clase corre contra
  * {@code sandbox-runner:2.0.0-capa1}, la imagen real de dos capas, con el catalogo de perfiles de
- * produccion en {@code perfiles/} (el perfil {@code java21-junit@3}) para los nueve bundles, y con
+ * produccion en {@code perfiles/} (el perfil {@code java21-junit@4}) para los nueve bundles, y con
  * un perfil de juguete propio ({@code framing-real@1}, en {@code src/test/resources/perfiles-it})
  * para el framing y la prueba de integridad byte a byte, que no necesitan una JVM adentro.
  *
@@ -311,7 +311,7 @@ class BundlesIT {
 
     private Resultado correrBundle(String nombreBundle) throws IOException {
         byte[] tar = tarDeBundle(rutaBundle(nombreBundle));
-        var salida = ejecucionProduccion.ejecutar(UUID.randomUUID().toString(), tar, "java21-junit@3");
+        var salida = ejecucionProduccion.ejecutar(UUID.randomUUID().toString(), tar, "java21-junit@4");
 
         assertNotEquals(Ejecucion.Estado.TIMEOUT, salida.resultado(),
                 nombreBundle + ": salto el backstop de 60s del ejecutor; stderr: " + salida.stderr());

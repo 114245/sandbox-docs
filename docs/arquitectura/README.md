@@ -175,7 +175,7 @@ veredicto de ser falso), los tres relojes y el ulimit `cpu` (fijados en `08` §4
 | Ruta | Qué es |
 |---|---|
 | `ms-sandbox/imagenes/` | Las imágenes de ejecución, alineadas con la spec `08` §4.1: `java21-junit/Dockerfile` (capa 1 + herramientas) y `capa1/capa1.sh` (el entrypoint, con el nonce de §7) — **9/9 casos hostiles contenidos** (ver `ms-sandbox/pruebas/`). El `Dockerfile`, `entrypoint.sh`, `run.sh`, `build.sh`, `suite-hostil.sh` y `ver-reporte.sh` de una sola capa se eliminaron del repo al pasar al modelo de dos capas; ver historial de git |
-| `ms-sandbox/perfiles/` | El catálogo de perfiles: `java21-junit@3.json` y el script de la capa 2 que referencia, `java21-junit.sh` |
+| `ms-sandbox/perfiles/` | El catálogo de perfiles: `java21-junit@4.json` y el script de la capa 2 que referencia, `java21-junit.sh` |
 | `ms-sandbox/pruebas/` | El banco de pruebas: `bundles/` (los nueve casos, camino feliz y hostiles) y `probar-capa1.sh`, el arnés de dos capas |
 | `ms-sandbox/ejecutor/` | Implementación del ejecutor en Java 21. **869 líneas** efectivas, 58 tests. Verificada contra la imagen real corriéndola **como contenedor** (ver nota abajo) |
 | `node-sidecar-test/` *(eliminado)* | Implementación del ejecutor en Node 22 + TypeScript, **626 líneas** efectivas, 65/65 tests, quedó de lado al validar la Opción 1 en Java; se eliminó del repo, ver historial de git |
