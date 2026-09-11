@@ -1,7 +1,7 @@
 # `ms-sandbox/` — todo lo desplegable y su banco de pruebas
 
-Un solo directorio para toda la implementación, separado de `../docs/` (el porqué) y de los
-documentos raíz (propuestas, handoff, hallazgos).
+Un solo directorio para toda la implementación, separado de `../docs/` (el porqué) y de las
+fuentes y hallazgos de investigación.
 
 | Directorio | Qué es | Rol |
 |---|---|---|

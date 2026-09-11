@@ -3,12 +3,12 @@
 > **Tema 06 — Sandbox / Runtime.** Grupo 8, 11 integrantes.
 > UTN FRC · Programación 4 + Metodología de Sistemas 2 · TPI 2026.
 >
-> **Qué es este documento.** El cierre de **D16**, la decisión que
-> [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §6 dejó planteada y que **bloquea el refactor del
-> entrypoint** (P9). No depende del Grupo 5: es nuestra y se cierra sola.
+> **Qué es este documento.** El cierre de **D16** y la evidencia que permitió implementar el
+> refactor del entrypoint (P9).
 >
-> **Estado: propuesta cerrada, a confirmar por el equipo.** El §9 dice exactamente qué hay que
-> confirmar y qué se rompe si no se confirma.
+> **Estado: decisión cerrada; P9 implementado y probado.** La integración pendiente está del lado
+> del worker: seleccionar el verificador por `reportFormat` y fallar de forma segura ante evidencia
+> ilegible o un formato desconocido (§9).
 >
 > **La premisa está verificada contra la imagen real** (§8): se neutralizó la guarda de la tapa y
 > `hostil-exit0` siguió mandando afuera el XML con `tests="0"`, que es lo que el worker necesita
@@ -24,11 +24,11 @@
 2. [Qué hace hoy cada capa, exacto](#2-qué-hace-hoy-cada-capa-exacto)
 3. [Las tres opciones, y por qué dos se caen](#3-las-tres-opciones-y-por-qué-dos-se-caen)
 4. [La decisión](#4-la-decisión)
-5. [El caso que rompe todo si no se decide: fail-closed](#5-el-caso-que-rompe-todo-si-no-se-decide-fail-closed)
+5. [El caso crítico: fail-closed](#5-el-caso-crítico-fail-closed)
 6. [Qué reemplaza a `testsEnReporte`](#6-qué-reemplaza-a-testsenreporte)
-7. [Lo que hay que corregir en otros documentos](#7-lo-que-hay-que-corregir-en-otros-documentos)
+7. [Correcciones derivadas](#7-correcciones-derivadas)
 8. [Cómo se prueba — y el resultado](#8-cómo-se-prueba--y-el-resultado)
-9. [Qué hay que confirmar y qué queda abierto](#9-qué-hay-que-confirmar-y-qué-queda-abierto)
+9. [Qué queda abierto para integrar el worker](#9-qué-queda-abierto-para-integrar-el-worker)
 
 ---
 
@@ -38,8 +38,8 @@ D16 quedó escrita así:
 
 > *¿Dónde se verifica "hay evidencia real de ejecución" cuando la tapa no sabe leer el reporte?*
 
-Y la respuesta que insinúa `11` §6 es *"se muda del entrypoint al worker"*. Al ir a mirar el código
-resulta que **ya está en el worker**, y desde antes del V4.
+La respuesta inmediata sería *"se muda del entrypoint al worker"*. Al ir a mirar el código resulta
+que **ya está en el worker**, y desde antes del V4.
 
 [`04-ms-sandbox-worker.md`](./04-ms-sandbox-worker.md) §6 lo dice sin ambigüedad, en la guarda que
 encabeza el mapeo de veredictos:
@@ -144,7 +144,7 @@ viene de una **versión de perfil inmutable**, registrada por nosotros y validad
 
 ## 4. La decisión
 
-> **D16 — CERRADA (propuesta).** La verificación de evidencia real de ejecución **queda entera en el
+> **D16 — CERRADA.** La verificación de evidencia real de ejecución **queda entera en el
 > worker**, en un verificador seleccionado por el `reportFormat` de la versión de perfil que corrió.
 > El entrypoint deja de contar pruebas y deja de emitir `testsEnReporte`. Las guardas 1, 2, 4 y 5
 > del §2 **se quedan donde están**, sin cambios.
@@ -177,9 +177,9 @@ inmutable. **Se puede saber siempre con qué verificador se juzgó una entrega d
 
 ---
 
-## 5. El caso que rompe todo si no se decide: fail-closed
+## 5. El caso crítico: fail-closed
 
-Este es el punto que `11` §6 no cubre, y es el que convierte a D16 de trámite en decisión.
+Este es el punto que convierte a D16 de trámite en decisión.
 
 Hoy la guarda contra `System.exit(0)` está sostenida por **dos** cosas, y la tapa es una de ellas.
 Después del refactor queda sostenida por **una sola**. Entonces:
@@ -242,10 +242,10 @@ formato— pero cubren lo que sí se puede cubrir desde ahí, que es la integrid
 
 ---
 
-## 7. Lo que hay que corregir en otros documentos
+## 7. Correcciones derivadas
 
-Cerrar D16 arrastra cuatro correcciones. Ninguna es grande, pero **dos de ellas cambian un criterio
-de aceptación**, así que no se pueden dejar para después del refactor.
+El cierre de D16 arrastró cuatro correcciones. El ejecutor y la capa 1 ya incorporan el refactor;
+las que corresponden al worker siguen siendo requisitos de integración.
 
 ### 7.1 `04` §6 — la fila `SALIDA_ANTICIPADA` del mapeo
 
@@ -256,7 +256,7 @@ Pasa a derivarlo el worker: sobre `OK` + buzón con contenido + evidencia legibl
 corridas** → `SALIDA_ANTICIPADA`, consume intento. La distinción contra `TIMEOUT_CPU` la sigue
 haciendo la tapa antes, con la CPU medida (§2), así que la segunda trampa de `04` §6 no vuelve.
 
-### 7.2 `11` §10 — el criterio de aceptación está escrito en códigos de salida
+### 7.2 El criterio de aceptación estaba escrito en códigos de salida
 
 La tabla dice que `hostil-exit0` tiene que dar *"salida anticipada (**exit 29**)"* hoy y
 *"idéntico"* después. **Con esta decisión el exit code cambia**: la tapa ya no tiene motivo para
@@ -267,8 +267,8 @@ salir 29, sale 0 y manda el sobre con el buzón adentro.
 > `codigo_de`— y atarle el criterio de aceptación a un refactor que justamente redistribuye quién
 > clasifica qué es medir la cosa equivocada.
 
-Hay que reescribir esa columna en términos de veredicto del worker **antes** de empezar P9, o el
-refactor va a "fallar" el test estando bien.
+El criterio de aceptación del ejecutor quedó expresado en términos del resultado observable. El
+worker deberá conservar el veredicto al integrar el nuevo sobre.
 
 ### 7.3 Las bandas de códigos de salida: dos que quedan libres
 
@@ -282,9 +282,9 @@ De nuestra banda `20–31` (D19), dos pierden sentido bajo el sándwich:
 No hay que reciclarlos: quedan reservados y sin uso, igual que el hueco `32–39`. Reusar un código
 con otro significado es la clase de cosa que se paga leyendo logs viejos a las tres de la mañana.
 
-### 7.4 `README` — mover D16 a cerradas
+### 7.4 `README` — D16 cerrada
 
-Con la fecha, el documento donde vive, y la nota de que **desbloquea P9**.
+El índice registra la decisión cerrada y P9 implementado.
 
 ---
 
@@ -297,8 +297,8 @@ Con la fecha, el documento donde vive, y la nota de que **desbloquea P9**.
 
 La primera versión de esta sección decía: *"sacar la guarda 3 del entrypoint y verificar que el
 veredicto sigue siendo `SALIDA_ANTICIPADA`"*. **Eso no se puede observar: el worker todavía no
-existe como código.** El repositorio tiene la imagen del runner y las dos implementaciones del
-ejecutor —que por R3.1 tienen prohibido decidir veredictos— y nada más. El worker, por ahora, es
+existe como código.** El repositorio tiene la imagen del runner y el ejecutor Java 21 —que por R3.1
+tiene prohibido decidir veredictos— y nada más. El worker, por ahora, es
 documentación.
 
 El test se reformuló para medir la misma propiedad sin la pieza que falta:
@@ -381,12 +381,12 @@ El `reportesTarGzB64` del sobre se abre con `base64 -d | tar -xzf -`. Sin `jq` i
 
 ---
 
-## 9. Qué hay que confirmar y qué queda abierto
+## 9. Qué queda abierto para integrar el worker
 
-**Para cerrar D16 hace falta que el equipo confirme tres cosas.** Las tres son de criterio, no de
-implementación:
+**D16 cerró con estos tres criterios.** El ejecutor y la capa 1 ya respetan el reparto; el worker
+todavía debe implementar la verificación fina y el comportamiento *fail-closed*:
 
-| # | Qué se confirma | Qué pasa si se decide al revés |
+| # | Criterio cerrado | Riesgo que evita |
 |---|---|---|
 | 1 | **La verificación fina vive sólo en el worker** (Opción C), y la tapa se queda con las guardas agnósticas. **Verificado en §8:** sin la guarda de la tapa, la evidencia llega igual | Con A, cada formato nuevo pasa a requerir una imagen nueva. Con B, se pierde la propiedad entera |
 | 2 | **Fail-closed:** formato desconocido o reporte ilegible ⇒ `ERROR_INTERNO`, nunca `EXITO`, y no consume intento | Es el único que **no** admite otra respuesta: la alternativa reintroduce el bug de `System.exit(0)` por omisión |
@@ -405,7 +405,6 @@ implementación:
 
 ## Documentos relacionados
 
-- [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §6 — dónde se planteó D16, y §2.8, la pérdida declarada.
 - [`04-ms-sandbox-worker.md`](./04-ms-sandbox-worker.md) §6 — el mapeo de veredictos y la guarda que ya existe.
 - [`08-spec-ejecutor.md`](./08-spec-ejecutor.md) §5 — el sobre, que cambia de campos.
 - [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) §4.6 y §4.7 — `reportFormat` y el smoke test, tal como se los planteamos al Grupo 5.

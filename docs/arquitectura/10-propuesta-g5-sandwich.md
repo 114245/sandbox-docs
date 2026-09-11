@@ -13,9 +13,9 @@
 > donde aceptamos el modelo y elegimos la Opción 1.
 >
 > **Este archivo queda como la versión larga y divulgativa**, con el glosario, los cuatro tipos de
-> desafío y la película completa. El documento único de la integración —el diff contra el V4, las
-> ausencias, el catálogo de perfiles y las decisiones D16–D21— es
-> [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md). **Si los dos se contradicen, manda el `11`.**
+> desafío y la película completa. No es una fuente normativa: el contrato vigente del ejecutor está
+> en [`08-spec-ejecutor.md`](./08-spec-ejecutor.md) y las decisiones abiertas, en el
+> [`README.md`](./README.md) §3.
 >
 > Última edición: **5 de septiembre de 2026** (encabezado actualizado el 8).
 

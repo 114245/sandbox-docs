@@ -23,12 +23,12 @@
 > | **§6.2** response | Se cae entera: `resumen`, `tests[]`, `mensaje` y `visibilidad` por test. No parseamos el reporte — devolvemos lo que produjo la capa 2 |
 > | **§7** definiciones abiertas | Las **1, 2, 4, 5, 6, 14, 16 y 17** dejan de ser negociaciones nuestras: caen en dominio de T05 |
 >
-> **Dónde está lo vigente mientras tanto:** [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §7 (el
-> detalle de qué se cae) y [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md)
-> §2 (el contrato del contenedor, completo).
+> **Dónde está lo vigente mientras tanto:**
+> [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) §2 contiene el
+> contrato del contenedor completo.
 >
-> **Por qué no está reescrito ya.** Porque la respuesta al V4 está mandada y sin contestar
-> (`11` §13.6): reescribirlo ahora sería escribirlo contra un contrato que todavía se mueve.
+> **Por qué no está reescrito ya.** Porque la respuesta al V4 está mandada y sin contestar:
+> reescribirlo ahora sería escribirlo contra un contrato que todavía se mueve.
 
 **Supuestos vigentes**
 
@@ -576,7 +576,7 @@ El número se ajusta con la prueba de carga; el mecanismo tiene que estar bien d
 > **⚠ §5.1 se aplana con el V4.** Los tres estados que dependen de saber Java —`TESTS_FALLIDOS`,
 > `COMPILACION_FALLIDA` y `SUITE_INVALIDA`— la tapa ya no los puede distinguir. La distinción fina
 > vuelve por dos vías nuevas: la **banda de códigos de salida `40–59`** que define T05, y el
-> archivo `$SANDBOX_STATUS/fase`. Ver [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §7.3.
+> archivo `$SANDBOX_STATUS/fase`.
 
 ```
         POST /ejecuciones
@@ -644,8 +644,7 @@ Y el reintento tiene tope: al agotarlo, el mensaje va a la **DLQ** y la fila que
 
 > **⚠ Este contrato está superado por el V4.** El request pierde `lenguaje`, `archivos[].rol`,
 > `archivos[].visibilidad`, `modo` y `trazabilidad.suiteVersion`; la respuesta de §6.2 se cae
-> entera, porque dejamos de parsear el reporte. Lo que hoy vale está en
-> [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §7.2 y §8, y el contrato del contenedor en
+> entera, porque dejamos de parsear el reporte. El contrato del contenedor está en
 > [`Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) §2. **Se reescribe
 > cuando G5 conteste, no antes.**
 

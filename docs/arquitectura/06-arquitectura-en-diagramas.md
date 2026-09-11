@@ -33,10 +33,10 @@
 >
 > **§4, adentro del contenedor efímero**, dibuja un contenedor que compila y corre JUnit. Bajo el
 > modelo de dos capas hay **dos programas** ahí adentro: nuestra tapa y el `run.sh` del Grupo 5. El
-> dibujo nuevo está en [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §2.2.
+> modelo vigente está especificado en [`08-spec-ejecutor.md`](./08-spec-ejecutor.md) §4.1.
 >
 > **§5, la máquina de estados**, se aplana: los tres estados que dependen de saber Java ya no los
-> puede distinguir la tapa (`11` §7.3).
+> puede distinguir la tapa.
 >
 > **§7, las cuatro decisiones abiertas**, quedó corta: hoy son quince, más seis nuevas del V4
 > (D16–D21) y cinco preguntas de contrato (A1–A5). La lista única y actualizada vive en el

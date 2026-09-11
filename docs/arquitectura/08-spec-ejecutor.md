@@ -26,11 +26,9 @@
 > | **§7** validación del tar | **No la escribe esta spec, y ahora se sabe por qué**: el ejecutor no desempaqueta nada (I7). La regla por tipo de entrada —sin `..`, sin barra inicial, sin enlaces simbólicos ni duros— vive en `capa1.sh`, que es quien extrae. Lo que sí entró acá es el **framing de tres documentos** que hizo falta para que la capa 1 exista (C9) (**P2**) |
 > | **§13** aceptación | Actualizada entera en C12. Los casos de symlink y hardlink siguen siendo de la suite de la imagen, no de la del ejecutor |
 >
-> Ver [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §10 y §11,
-> [`Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) §2.4 y
-> [`../../HANDOFF-opcion1.md`](../../HANDOFF-opcion1.md).
+> Ver [`Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) §2.4.
 
-> **Leer esto primero.** La implementación en Java se construyó contra la versión anterior de este documento y **no** cubre lo de abajo. Las dos implementaciones tienen que quedar alineadas con esta versión.
+> **Estado actual.** La implementación vigente es Java 21 y está alineada con los cambios de esta sección.
 
 | # | Cambio | Dónde | Impacto |
 |---|---|---|---|
@@ -103,11 +101,11 @@ Están acá para que **ninguna implementación los agregue por iniciativa propia
 
 ## 2. Transporte y superficie de red
 
-**R2.1** — El ejecutor **DEBE** escuchar en un **socket Unix** ubicado en un volumen compartido únicamente con el worker. Ruta: `/run/ejecutor/ejecutor.sock`, permisos `0660`.
+**R2.1** — El ejecutor **DEBE** escuchar al worker en un **socket Unix** ubicado en un volumen compartido únicamente con él. Ruta: `/run/ejecutor/ejecutor.sock`, permisos `0660`. Para hablar con Docker, el transporte permitido es `unix://` o `npipe://` (R5.13).
 
-**R2.2** — El ejecutor **NO DEBE** escuchar en un puerto TCP en la configuración por defecto. Un endpoint HTTP sin autenticación en una red de Docker es alcanzable por todos los contenedores de esa red; el socket Unix reduce el conjunto de quienes pueden hablarle a "quien tenga el volumen montado".
+**R2.2** — El ejecutor **NO DEBE** escuchar en un puerto TCP ni usar `tcp://`, `http://` o `https://` para hablar con Docker. Un endpoint HTTP en una red de Docker amplía la superficie de ataque; además, el cierre abortivo del canal adjunto trunca `stdin` sobre TCP (R5.13).
 
-**R2.3** — Si por una limitación del entorno hiciera falta TCP, **DEBE** ser sobre una red interna dedicada exclusivamente a worker + ejecutor (`internal: true`), y **DEBE** exigir un secreto compartido en un header. Esta variante se documenta como degradada.
+**R2.3** — TCP no tiene variante degradada de producción. Si el entorno no ofrece `unix://` o `npipe://` para Docker, el ejecutor **DEBE** fallar al arrancar (A41).
 
 **R2.4** — El contenedor del alumno **nunca** puede alcanzar al ejecutor: corre con `NetworkMode: none` (§4.1) y sin el socket montado. Esto es consecuencia de la spec, no algo que el ejecutor deba verificar en runtime.
 
@@ -1036,7 +1034,6 @@ lo auditamos: «podemos leerlo» es una hipótesis, «lo leímos» es evidencia.
 - JDK-8377806, *HTTP over Unix Domain Sockets*; JEP 380, *Unix domain socket channels*.
 - CVE-2025-45582 — GNU tar ≤ 1.35, traversal en dos extracciones; el motivo de no reutilizar `/work`.
 - CVE-2025-52565 — runc; solo afecta contenedores con `Tty: true`.
-- Documentos hermanos: `03-ms-sandbox-ejecucion.md` (por qué la entrega va por stdin), `05-ms-sandbox-patrones.md` (por qué ejecutor y no proxy), `11-impacto-v4-g5.md` (el análisis del V4 que originó C7–C12).
+- Documentos hermanos: `03-ms-sandbox-ejecucion.md` (por qué la entrega va por stdin) y `05-ms-sandbox-patrones.md` (por qué ejecutor y no proxy).
 - `ms-sandbox/imagenes/capa1/capa1.sh` — **la capa 1**: el entrypoint de §4.1, quien extrae el tar, invoca a la capa 2 y arma el sobre. Las reglas de extracción que esta spec **no** fija (I7) viven ahí.
-- `../../HANDOFF-opcion1.md` — el plan de la Opción 1 y la tabla de resultados de los nueve bundles (A39).
 - `ms-sandbox/ejecutor/README.md` — la implementación de referencia: dónde vive cada cosa, qué se perdió con el port y las dos intermitencias que aparecieron al cerrar la validación.

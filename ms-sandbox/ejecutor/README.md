@@ -1,12 +1,10 @@
 # Ejecutor de `ms-sandbox` — implementación Java 21
 
-Implementación del contrato de [`08-spec-ejecutor.md`](08-spec-ejecutor.md). El documento es la
+Implementación del contrato de [`08-spec-ejecutor.md`](../../docs/arquitectura/08-spec-ejecutor.md). El documento es la
 fuente de verdad; este README solo dice dónde vive cada requerimiento y qué quedó abierto.
 
-Alineado con la versión de la spec que incorpora §0 (cambios C1 a C6). **La spec todavía no
-incorpora el modelo de dos capas de la Opción 1 del V4, el catálogo de perfiles, ni la derogación
-de R11.4**: se actualiza entera cuando cierre la validación. Mientras tanto, este README y
-[`../../HANDOFF-opcion1.md`](../../HANDOFF-opcion1.md) son lo que describe el estado real.
+Alineado con la versión vigente de la spec, incluido el modelo de dos capas, el catálogo de
+perfiles y la derogación de R11.4.
 
 ## Correr
 
@@ -104,7 +102,7 @@ reescribirse.
 | `Motor`, `Main`, `Log`, `ErrorDaemon` | 61 | frontera, cableado, R11.6, R11.7 |
 | **Total** | **~1066** | código efectivo, sin comentarios ni blancos |
 
-**El código no se achicó, y ahora crece por el catálogo, no por el port.** El handoff estimaba
+**El código no se achicó, y ahora crece por el catálogo, no por el port.** La estimación inicial era
 pasar de 869 a ~530 líneas con `docker-java`; el número real venía en 938 desde el port y ahora
 suma `Catalogo` entero (108 líneas nuevas) más la plomería del perfil por ejecución en `Ejecucion`
 y `Servidor`. Dos motivos para el salto original, y conviene seguir diciendo los dos:
@@ -115,7 +113,7 @@ y `Servidor`. Dos motivos para el salto original, y conviene seguir diciendo los
   reconstruirle encima la semántica que no trae: el EOF de stdin, el tope por llamada y la guarda
   contra la salida sin enmarcar.
 - `Http` **no se fue**: lo usa `Servidor` para hablar con el worker, que no tiene nada que ver con
-  Docker. El handoff lo contaba como ahorro y estaba equivocado.
+  Docker. La estimación inicial lo contaba como ahorro y estaba equivocada.
 
 Lo que sí se ahorró es `Ejecucion`, que bajó de 152 a 106: ya no hay watchdogs, ni hilos para
 acotar el `wait`, ni escritura manual de stdin.
@@ -135,7 +133,7 @@ pero hay que verificar una por una contra el arranque real del cliente.
 
 ## El golden A1/A2 sobrevivió, y es más fuerte que antes
 
-Era la pérdida que el handoff daba por hecha. No ocurrió: `CreateContainerCmdImpl` **es** el modelo
+Esa pérdida se daba por hecha. No ocurrió: `CreateContainerCmdImpl` **es** el modelo
 del cuerpo del pedido (sus campos llevan `@JsonProperty` con los nombres de la API y la clase está
 anotada `@JsonAutoDetect(... NONE)`, así que nada más se serializa). `Spec.bytesDeCreate` lo
 serializa con `DockerClientConfig.getDefaultObjectMapper()`, que es literalmente el mapper con el
@@ -220,7 +218,7 @@ API en todas las rutas (R5.0), el tar viaja opaco (I7), que el nonce no se filtr
 (R7.3), y el orden exacto de los trece campos de la respuesta (los diez de §3.1 más
 `perfilId`/`perfilVersion`/`perfilHash` del catálogo de perfiles, al final).
 
-## Paso 4 del handoff — validado contra Docker real (10/09)
+## Validación contra Docker real (10/09)
 
 `BundlesIT` corre contra `sandbox-runner:2.0.0-capa1` (la imagen real de dos capas, 755 MB), **no**
 el fixture de busybox que usa `ProtocoloIT`. Usa dos catálogos de perfiles: `perfiles/` (producción,
@@ -240,8 +238,8 @@ después de la ejecución real: si la costura guion-tar se hubiera comido un byt
 archivo habría llegado corrido o el tar directamente no habría parseado (`BUNDLE_INVALIDO`, 22). Los
 dos bytes llegaron intactos. ✅
 
-**3. Los nueve bundles, contra la tabla de `../../HANDOFF-opcion1.md` §6** — medidos por primera vez A
-TRAVÉS DEL EJECUTOR (la tabla original se midió con `probar-capa1.sh`, sin el ejecutor en el medio):
+**3. Los nueve bundles de A39** — medidos A TRAVÉS DEL EJECUTOR; antes sólo se habían medido con
+`probar-capa1.sh`, sin el ejecutor en el medio:
 
 | bundle | exit (esperado) | exit (medido) | resultado capa 1 (medido) | exitEval (medido) | surv (medido) | ¿coincide? |
 |---|---|---|---|---|---|---|
@@ -255,11 +253,11 @@ TRAVÉS DEL EJECUTOR (la tabla original se midió con `probar-capa1.sh`, sin el 
 | hostil-paquete | 0 | 0 | OK | 0 | 0 | ✅ (primera medición a través del ejecutor, ver abajo) |
 | hostil-red | 0 | 0 | OK | 0 | 0 | ✅ (primera medición a través del ejecutor, ver abajo) |
 
-**Cero divergencias.** Los nueve bundles reprodujeron la tabla del handoff exactamente, con el
+**Cero divergencias.** Los nueve bundles reprodujeron los resultados esperados de A39, con el
 ejecutor Java de por medio (no solo `probar-capa1.sh`). No hubo que torcer ningún assert ni la
 imagen para que cerrara.
 
-**El cabo suelto que el handoff §7 pedía confirmar**: `hostil-paquete` (el shadowing de `tp.Ayuda`,
+**El cabo suelto que faltaba confirmar**: `hostil-paquete` (el shadowing de `tp.Ayuda`,
 CVE-2024-23682-style) y `hostil-red` (el aislamiento de `--network none`) nunca habían corrido a
 través del ejecutor, solo con `run.sh` a mano. Ahora sí: los dos dieron `OK` con `exitEval=0` y
 `surv=0`, confirmando empíricamente que **con el ejecutor real de por medio** (a) los tests del
@@ -335,10 +333,10 @@ Una sola corrida verde no prueba que una intermitencia se fue. La evidencia acep
    socket del ejecutor o programar el barrido.
 5. **El fat jar de 21 MB.** Podar las dependencias que `docker-java-core` arrastra y no usamos.
 6. **R14.1**: falta la revisión línea por línea por dos personas que no escribieron el código.
-7. ~~Paso 4 del handoff~~ **hecho** (10/09): `BundlesIT`, contra `sandbox-runner:2.0.0-capa1` real,
+7. **Validación contra Docker real hecha** (10/09): `BundlesIT`, contra `sandbox-runner:2.0.0-capa1`,
    con los nueve bundles de `pruebas/bundles/` y el perfil de producción `java21-junit@4`.
-   Ver «Paso 4 del handoff — validado contra Docker real» arriba. Cero divergencias contra la tabla
-   de `../../HANDOFF-opcion1.md` §6, y `hostil-paquete`/`hostil-red` quedaron confirmados por primera
+   Ver «Validación contra Docker real» arriba. Cero divergencias contra los
+   resultados esperados de A39, y `hostil-paquete`/`hostil-red` quedaron confirmados por primera
    vez a través del ejecutor (antes solo habían corrido con `run.sh`).
 8. ~~`EjecucionTest#elNonceEsDistintoCadaVez` y `#framingDeTresDocumentos` eran intermitentes bajo
    carga~~ **resuelto** (R5.13 / A41): la causa era que `Docker.Adjunto.close()` le da EOF al

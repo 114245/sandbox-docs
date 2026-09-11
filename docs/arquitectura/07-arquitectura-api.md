@@ -39,7 +39,7 @@
 >   con versionado inmutable (`POST` crea versión nueva, `PUT` se rechaza), ciclo
 >   `BORRADOR → VALIDADA → ACTIVA → DEPRECADA`, smoke test automático al registrar y autenticación
 >   servicio a servicio. Es trabajo nuevo de tamaño mediano, y **espera la confirmación de la
->   Opción 1** (**D17**). Está especificado en [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §8.
+>   Opción 1** (**D17**, en el [`README.md`](./README.md) §3).
 > - **§3.4, a dónde publica el relay.** Acá dice **RabbitMQ**, que es nuestra cola de trabajo interna
 >   (`04` §3). El resultado de una ejecución, en cambio, tiene que salir al **bus de la plataforma**
 >   —Kafka, del grupo de notificaciones— como evento `EjecucionFinalizada` con el resumen y no el

@@ -278,9 +278,10 @@ Y hay que **cerrar el círculo**: al mandar el mensaje a la DLQ, la fila de `eje
 > JUnit, porque no sabe que existe JUnit: **la verificación entera se muda acá**, indexada por el
 > `reportFormat` que declara el perfil (`junit-xml`, `pmd-xml`, …).
 >
-> Eso es **D16**, está abierta, no depende del Grupo 5 y **bloquea el refactor del entrypoint**
-> (P9). Es la decisión más urgente que tenemos. Ver
-> [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §6.
+> **D16 está cerrada y P9 está implementado y probado**: el modelo de dos capas ya vive en la
+> imagen y en el ejecutor. Para integrar el worker todavía falta implementar el verificador
+> seleccionado por `reportFormat`, con comportamiento *fail-closed*. Ver
+> [`12-d16-evidencia-de-ejecucion.md`](./12-d16-evidencia-de-ejecucion.md).
 
 El modelo mental que más ayuda:
 
@@ -572,7 +573,7 @@ Cada perfil se lleva además una responsabilidad distinta de la infra:
 - **El watchdog**, en el perfil `worker`.
 - **El janitor ya no existe del lado del worker** ([§13](#13-el-janitor--el-que-se-fue-y-el-que-queda)): el barrido de contenedores es del ejecutor.
 
-**Y hay un tercer deployable**, que este documento no tenía: el **ejecutor**. No es un perfil de Spring ni sale del mismo `jar` — es un proceso aparte, con su propio ciclo de vida, posiblemente en otro lenguaje ([D9](./README.md)), y es el único que monta `/var/run/docker.sock`. El worker lo alcanza por un volumen compartido, no por la red.
+**Y hay un tercer deployable**, que este documento no tenía: el **ejecutor Java 21**. No es un perfil de Spring ni sale del mismo `jar`: es un proceso aparte, con su propio ciclo de vida, y es el único que accede a Docker. El worker lo alcanza por un volumen compartido, no por la red.
 
 ---
 

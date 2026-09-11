@@ -40,7 +40,7 @@
 #      dice: con "times", el cpuMs de PRUEBAS no es confiable.
 #
 #   2. Pared: es ruido para calificar. Medido para el mismo bundle: de 1,8 a
-#      5,2 s segun la carga del host (HANDOFF-opcion1.md §4). Sirve para
+#      5,2 s segun la carga del host. Sirve para
 #      mostrar, no para poner nota.
 #
 #   3. cpuMs de PRUEBAS incluye arrancar la JVM y descubrir los tests, no solo

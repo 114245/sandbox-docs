@@ -27,8 +27,7 @@
 > mediciones y la regla que atraviesa todo siguen siendo exactamente lo que eran. De hecho ganan
 > peso: pasan a ser casi lo único que aportamos al veredicto.
 >
-> El panorama completo está en [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md), y el estado de
-> decisiones actualizado en el [`README.md`](./README.md) §3.
+> El estado de decisiones actualizado está en el [`README.md`](./README.md) §3.
 
 > **Un servicio que ejecuta código no confiable, escrito por un alumno, junto a pruebas escritas
 > por un profesor, en un entorno del que ese código no puede escapar ni al que puede hacer daño,

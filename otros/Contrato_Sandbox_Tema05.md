@@ -28,8 +28,6 @@
 >
 > - [`otros/Respuesta_G8_a_Propuesta_V4.md`](./Respuesta_G8_a_Propuesta_V4.md) — el contrato del
 >   contenedor completo (§2) y el modelo asincrónico (§6). Es lo que se le mandó a G5.
-> - [`docs/arquitectura/11-impacto-v4-g5.md`](../docs/arquitectura/11-impacto-v4-g5.md) §7.4 — el
->   análisis de por qué este documento queda obsoleto.
 
 ---
 
