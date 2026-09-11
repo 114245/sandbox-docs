@@ -1,6 +1,7 @@
 package sandbox.ejecutor;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -232,19 +233,28 @@ final class DaemonDePrueba implements AutoCloseable {
         out.write(datos);
     }
 
-    /** logs viaja chunked, como en el daemon real: es lo que ejercita R5.7. */
+    /**
+     * logs viaja chunked, como en el daemon real: es lo que ejercita R5.7.
+     *
+     * El {@link BufferedOutputStream} es solo para no hacer una syscall por cada trozo de 7 bytes:
+     * con salidas de mas de MAX_SALIDA_BYTES (probando R6.2/R6.7 juntos) escribir sin buffer tarda
+     * varios segundos y hace flapear TIMEOUT_DAEMON_MS. No cambia el contrato del daemon: los bytes
+     * que llegan al socket son los mismos, solo se agrupan de este lado antes de escribirlos.
+     */
     private static void chunked(OutputStream out, byte[] datos) throws IOException {
-        out.write(("HTTP/1.1 200 OK\r\nContent-Type: application/vnd.docker.multiplexed-stream\r\n"
+        OutputStream b = new BufferedOutputStream(out, 64 * 1024);
+        b.write(("HTTP/1.1 200 OK\r\nContent-Type: application/vnd.docker.multiplexed-stream\r\n"
                 + "Transfer-Encoding: chunked\r\nConnection: close\r\n\r\n")
                 .getBytes(StandardCharsets.ISO_8859_1));
         int trozo = 7;   // trozos chicos y desalineados con los frames, a proposito
         for (int i = 0; i < datos.length; i += trozo) {
             int n = Math.min(trozo, datos.length - i);
-            out.write((Integer.toHexString(n) + "\r\n").getBytes(StandardCharsets.ISO_8859_1));
-            out.write(datos, i, n);
-            out.write("\r\n".getBytes(StandardCharsets.ISO_8859_1));
+            b.write((Integer.toHexString(n) + "\r\n").getBytes(StandardCharsets.ISO_8859_1));
+            b.write(datos, i, n);
+            b.write("\r\n".getBytes(StandardCharsets.ISO_8859_1));
         }
-        out.write("0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
+        b.write("0\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
+        b.flush();
     }
 
     static byte[] frame(int tipo, String texto) {

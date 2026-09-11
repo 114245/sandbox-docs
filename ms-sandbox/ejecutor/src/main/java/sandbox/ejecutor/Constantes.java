@@ -9,7 +9,6 @@ final class Constantes {
     static final long TIMEOUT_EJECUCION_MS = 60_000;
     static final long TIMEOUT_DAEMON_MS    = 5_000;
     static final int  MAX_SALIDA_BYTES     = 1_048_576;   // 1 MiB por stream
-    static final int  MAX_FRAME_BYTES      = 1_048_576;   // 1 MiB por frame
     static final int  MAX_CONCURRENTES     = 8;
     static final int  MAX_COLA             = 16;
     static final long INTERVALO_BARRIDO_MS = 300_000;     // 5 min
