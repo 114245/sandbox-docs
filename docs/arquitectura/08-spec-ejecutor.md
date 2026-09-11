@@ -328,8 +328,7 @@ Y el nombre del contenedor, en la query: `?name=sandbox-<X-Ejecucion-Id>`.
 | `MAX_BUNDLE_BYTES` | `2097152` (2 MiB) | Tope del cuerpo del request |
 | `TIMEOUT_EJECUCION_MS` | `60000` | Reloj de pared del ejecutor, desde `start`. Es la **red de última instancia**, no el mecanismo |
 | `TIMEOUT_DAEMON_MS` | `5000` | Por llamada a la API de Docker (salvo `wait`) |
-| `MAX_SALIDA_BYTES` | `1048576` (1 MiB) | Por cada stream, tras demultiplexar |
-| `MAX_FRAME_BYTES` | `1048576` (1 MiB) | Tope de un frame individual (§6) |
+| `MAX_SALIDA_BYTES` | `1048576` (1 MiB) | Por cada stream, tras demultiplexar (§6, R6.7) |
 | `MAX_CUERPO_DAEMON_BYTES` | `16777216` (16 MiB) | Tope de una respuesta del daemon leída entera en memoria. Con `max-size: 8m` el log no debería acercarse; existe para que un daemon anómalo no nos haga crecer sin límite |
 | `MAX_CONCURRENTES` | `8` | Contenedores simultáneos |
 | `MAX_COLA` | `16` | Esperando turno; por encima, `503` |
@@ -499,13 +498,42 @@ termina o vence su tope (R8.5).
 
 **R6.1** — Antes de demultiplexar, **DEBE** verificarse que el `Content-Type` de la respuesta sea `application/vnd.docker.multiplexed-stream`. Si es `application/vnd.docker.raw-stream`, el contenedor tiene TTY y la salida **no** viene enmarcada: eso es `ERROR_DAEMON`, no un caso a manejar. Es un assert de dos líneas que convierte una corrupción silenciosa en un error inmediato.
 
-**R6.2** — Si el largo declarado supera `MAX_FRAME_BYTES`, **DEBE** abortarse la lectura con `ERROR_DAEMON`. **NO DEBE** reservarse el buffer antes de validar el largo: el campo es un `uint32` y admite valores de hasta 4 GiB.
+**R6.2** — El campo de largo es un `uint32` y admite valores de hasta 4 GiB, y ningún largo
+declarado **DEBE** hacer que se reserve memoria proporcional a él. Esto **está garantizado por
+construcción**, no por una validación propia: el consumidor de frames de `docker-java`
+(`FramedInputStreamConsumer`) lee el payload en trozos de un buffer fijo de 1024 bytes, sea cual sea
+el largo que el encabezado declare, así que nunca hay un `new byte[largoDeclarado]`. Lo que ya **no**
+es una garantía nuestra es que un largo fuera de rango **aborte con `ERROR_DAEMON`**: confirmado
+contra `DesenmarcadoTest#a9_...` y `#r65_elMismoLargoDeCuatroGibSinNadaDespuesTerminaEnSilencio`, un
+largo declarado de 4 GiB (que la librería acumula en un `int` y le queda negativo) puede terminar de
+dos formas distintas según qué haya bufferizado el transporte en ese instante exacto: si todavía
+quedan bytes del stream ya leídos del socket, la lectura con un largo negativo revienta como
+`ArrayIndexOutOfBoundsException` y sale como `ERROR_DAEMON`; si el frame corrupto es lo último del
+stream, la lectura da directamente fin de stream y termina en silencio, igual que cualquier otro
+truncamiento (R6.5). Las dos ramas cumplen la mitad que sí podemos prometer —nunca se reserva
+memoria por el largo declarado, y el desenlace es inmediato— pero cuál de las dos ocurre es un
+accidente de alineación con el transporte, no un tope propio. El tope real y determinístico de
+memoria por stream es `MAX_SALIDA_BYTES` (R6.7), que es nuestro y no depende de esto.
 
 **R6.3** — Un frame con largo `0` es válido: payload vacío, seguir leyendo. **NO DEBE** trabar el bucle ni tratarse como fin de stream.
 
 **R6.4** — Un tipo distinto de `1` o `2` **DEBE** ser error fatal. **NO DEBE** asumirse `stdout` por defecto: adivinar es como se corrompe un resultado en silencio.
 
-**R6.5** — Los frames pueden llegar partidos, y un mismo frame puede venir en varios trozos de red. La lectura **DEBE** acumular en un buffer hasta tener el encabezado completo, y después hasta tener el payload completo.
+**R6.5** — Los frames pueden llegar partidos, y un mismo frame puede venir en varios trozos de red;
+un encabezado o un payload puede quedar **truncado** si la conexión termina a mitad de un frame
+—incluso con un cuerpo HTTP perfectamente válido y cerrado (`Transfer-Encoding: chunked` con su
+`0\r\n\r\n`), si el contenido de Docker adentro de ese cuerpo simplemente se corta antes—.
+**Confirmado** (`DesenmarcadoTest#r65_...`): `docker-java` no lo trata como un error. Cuando la
+lectura de un encabezado o un payload se topa con el fin del stream, el consumidor de frames
+devuelve lo que ya había entregado y termina, sin pasar por `ERROR_DAEMON`. Esto **no** activa
+`salidaTruncada`: ese campo es del tope propio de R6.7 y sólo se enciende cuando **nosotros**
+cortamos por exceso de bytes, nunca cuando es el stream el que se acorta solo. La consecuencia
+práctica, y hay que decirla porque no es simétrica con R7.7: si el corte se llevó puesto el bloque
+del reporte, la respuesta sale con `reporteAusente: true` y `salidaTruncada: false` —exactamente la
+misma combinación que una entrega que nunca produjo reporte—, así que este truncamiento en
+particular **no** es distinguible por el worker de "no hubo reporte". R7.7 sólo describe la
+combinación (`reporteAusente: true` **y** `salidaTruncada: true`) para el truncamiento de R6.7; este
+es un truncamiento distinto, más arriba en la cadena, y punto ciego.
 
 **R6.6** — Una línea de texto puede cruzar dos frames, y un frame puede traer varias líneas. **NO DEBE** parsearse por líneas adentro de un frame: se concatena todo el stream primero y recién ahí se separa.
 
@@ -639,15 +667,24 @@ escrito en castellano.
 > problema resuelto: R11.3 sigue vigente y cada una de esas dependencias es superficie que no
 > auditamos.
 
-**R11.5 — Tamaño del código propio.** Objetivo: **por debajo de 400 líneas** sin contar tests. No es una métrica cosmética: la corrección de un control de seguridad se establece leyéndolo, no probándolo, y eso solo es viable si es chico (Saltzer & Schroeder, 1975, *economía de mecanismo*).
+**R11.5 — ~~Tamaño del código propio.~~ DEROGADA (11-sep-2026).**
 
-> **Incumplida, y por más que antes: 1064 líneas efectivas** (§14). El objetivo se fijó en 400 y la
-> primera implementación dio 869; el port a `docker-java` no lo bajó y el catálogo de perfiles lo
-> subió. El argumento de Saltzer & Schroeder no cambia por eso —sigue siendo cierto que un control
-> de seguridad se audita leyéndolo—, pero un objetivo que se incumple por 2,6× y se deja escrito
-> como objetivo deja de ser un requisito y pasa a ser una decoración. Lo que corresponde es
-> **R14.1**: si de verdad se puede leer entero, que se lea y quede la evidencia. «Podemos leerlo»
-> es una hipótesis; «lo leímos» es un hecho.
+> **Qué decía y por qué se cayó.** Decía: objetivo **por debajo de 400 líneas** sin contar tests,
+> porque la corrección de un control de seguridad se establece leyéndolo, no probándolo, y eso solo
+> es viable si es chico (Saltzer & Schroeder, 1975, *economía de mecanismo*). La implementación de
+> referencia midió **1064 líneas efectivas** (§14): 2,6× el objetivo. El argumento de Saltzer &
+> Schroeder no se cae por eso —sigue siendo cierto que un control de seguridad se audita leyéndolo—,
+> pero el número que debía disciplinar ese argumento sí: un objetivo incumplido por 2,6× y dejado
+> escrito igual deja de ser un requisito y pasa a ser una decoración, tal como este mismo documento
+> ya lo decía en R14.2 antes de esta derogación.
+>
+> **El argumento nuevo.** El objetivo de auditabilidad que R11.5 perseguía no desaparece: sigue vivo
+> en **R14.1**, la revisión línea por línea por dos personas que no escribieron el código. La
+> diferencia es que R14.1 es una garantía verificable con evidencia (¿se hizo la revisión, están las
+> observaciones versionadas?) y R11.5 era un número que ya se sabía incumplido y que no iba a bajar
+> por seguir escrito. Entre bajar el alcance del componente (reescribir para volver a 400 líneas) y
+> cambiar el objetivo dejando el argumento por escrito, se elige lo segundo: el tamaño no es lo que
+> queda sosteniendo la auditabilidad de acá en más, R14.1 sí.
 
 **R11.6 — Logs del ejecutor.** Por ejecución: id, duración de cada paso, bytes escritos, bytes leídos por stream, resultado. **NO DEBEN** registrarse el contenido del bundle, la salida del alumno ni el nonce.
 
@@ -678,10 +715,11 @@ Cada una tiene un test en §13. Son las afirmaciones que se sostienen en la defe
 Cada test es una afirmación binaria. **Esta sección dice también lo que quedó sin cubrir y por
 qué**: una suite de aceptación que sólo enumera lo verde no es evidencia, es publicidad.
 
-> **Estado al 10‑sep‑2026.** La implementación de referencia (Java, rama `feat/catalogo-perfiles`)
-> corre **71 tests en verde**, en tres corridas consecutivas. La implementación en Node quedó de
-> lado, así que donde este documento decía «las dos implementaciones corren la misma suite» ahora
-> hay una sola, y A2 quedó sin contraparte (ver 13.1).
+> **Estado al 11‑sep‑2026.** La implementación de referencia (Java, rama `feat/catalogo-perfiles`)
+> corre **122 tests en verde** (`mvn test`, `BUILD SUCCESS`), incluidos `DesenmarcadoTest` (A8–A12)
+> y el caso del guion adverso de A38. La implementación en Node quedó de lado, así que donde este
+> documento decía «las dos implementaciones corren la misma suite» ahora hay una sola, y A2 quedó
+> sin contraparte (ver 13.1).
 
 ### 13.1 Golden test de la spec — el más importante
 
@@ -724,19 +762,23 @@ ya no se mira el `Content-Type` de `logs`, porque con la librería (C11) esa res
 nuestras manos. Se detecta por **tipo de frame**: `docker-java` entrega la salida no enmarcada como
 frames `RAW` y el acumulador los rechaza. La guarda que importaba —no adivinar que eso es stdout—
 sigue cerrada; el camino por el que se llega a ella es otro.
-> **A8–A12 quedaron PARCIALES a propósito, y hay que decir qué se perdió.** El desenmarcado dejó
-> de ser código nuestro: lo hace `docker-java` (C11). Los tests que alimentaban a nuestro
-> demultiplexor con streams sintéticos corruptos ya no tienen a quién alimentar. Concretamente:
-> **R6.2** (largo de frame fuera de rango ⇒ `ERROR_DAEMON`) ya no tiene tope propio, y **R6.5**
-> (encabezado o payload truncado) ahora corta y devuelve lo que llegó, **en silencio**. Lo que sí
-> se conservó es la guarda de A7. Esto es deuda de auditoría, no un detalle de implementación: son
-> tres afirmaciones de §6 que el documento sigue haciendo y la suite ya no prueba.
+> **Cómo quedaron A8–A12 (`DesenmarcadoTest`).** El desenmarcado dejó de ser código nuestro: lo hace
+> `docker-java` (C11), y `AcumuladorTest` ya prueba lo que queda de nuestro lado (R6.4, R6.6, R6.7)
+> con `Frame` construidos a mano. Lo que le faltaba a esa cobertura era la cadena **entera**:
+> `docker-java` desenmarcando bytes crudos servidos por `DaemonDePrueba`, no `Acumulador` solo.
+> `DesenmarcadoTest` alimenta a `DaemonDePrueba` con encabezados armados a mano —algunos válidos,
+> otros corruptos a propósito— y llama a `Docker.logs` de punta a punta. El resultado no es el que
+> se esperaba leyendo el fuente de la librería, y hay que decirlo: **R6.2 ya no tiene un tope propio
+> que aborte con `ERROR_DAEMON`** — un largo de 4 GiB puede terminar en `ERROR_DAEMON`
+> (`ArrayIndexOutOfBoundsException`, ver R6.2) o en silencio, según qué haya bufferizado el
+> transporte en ese instante, y en ningún caso se reserva memoria por el largo declarado. **R6.5
+> corta y devuelve lo que llegó, en silencio, confirmado.** Las dos reescrituras están en §6.
 
-**A8** — Con un tar armado para que la salida llegue en muchos frames chicos, verificar que el texto reconstruido es exacto.
-**A9** — Alimentar al demuxer con un stream sintético que declare un frame de 4 GiB: debe abortar sin reservar memoria.
-**A10** — Stream sintético con un frame de largo 0 en el medio: debe procesarse sin trabarse.
-**A11** — Stream sintético con tipo de stream `7`: debe ser error fatal, no asumirse stdout.
-**A12** — Stream sintético donde una línea cruza dos frames: el texto reconstruido no debe tener cortes espurios.
+**A8** — ✅ Con un tar armado para que la salida llegue en muchos frames chicos, verificar que el texto reconstruido es exacto.
+**A9** — ✅ Alimentar a `docker-java` con un frame que declara 4 GiB: **no** se reserva memoria proporcional al largo declarado y el desenlace es inmediato, sea `ERROR_DAEMON` o el corte silencioso de R6.5 (ver R6.2).
+**A10** — ✅ Un frame de largo 0 en el medio no traba el bucle.
+**A11** — ✅ Un tipo de stream inválido (`RAW`, y también `STDIN`) es error fatal; no se asume stdout.
+**A12** — ✅ Una línea que cruza dos frames se reconstruye sin cortes espurios.
 
 ### 13.4 Entrada hostil
 
@@ -823,11 +865,13 @@ campo existe para que el worker pueda reconstruir con qué código exacto se eva
 > propiedad que importa —un hash declarado nunca llega a ser `perfilHash`— y además es la lectura
 > más estricta: un campo con un nombre mal escrito tampoco pasa en silencio.
 
-**A38** — *(C9, R7.11)* ✅ **parcial.** El largo se cuenta en bytes y no en caracteres: el test usa
-un guion con una `ñ` y afirma que el número que viaja es el de bytes —y, explícitamente, que **no**
-es el de caracteres—. Lo que **falta** es el otro caso de R7.9: un guion que contenga, en su texto,
-la línea que uno elegiría como separador. Es el motivo por el que el largo va adelante, y hoy es
-argumento sin test.
+**A38** — *(C9, R7.9, R7.11)* ✅ El largo se cuenta en bytes y no en caracteres: un test usa un guion
+con una `ñ` y afirma que el número que viaja es el de bytes —y, explícitamente, que **no** es el de
+caracteres—. El otro caso de R7.9 —un guion que contiene, en su propio texto, la línea que un
+protocolo ingenuo basado en texto elegiría como separador (un marcador de reporte falso, un magic de
+tar)— también tiene test: `EjecucionTest#a38_unGuionConLaLineaSeparadoraNoRompeElFraming` arma ese
+guion hostil y confirma que nonce, guion y tar llegan byte a byte igual, porque el protocolo nunca
+busca una marca de fin, cuenta bytes. Ya no es argumento sin test.
 
 **A39** — *(C9)* Los nueve bundles de referencia corren contra la **imagen real de dos capas**
 —`sandbox-runner:2.0.0-capa1`, no el fixture de busybox— con el ejecutor de por medio, y reproducen
@@ -893,8 +937,8 @@ que es TCP.
 | A6, A39 — framing y los nueve bundles contra la imagen real | ✅ |
 | A7 — salida sin enmarcar | ✅ por tipo de frame (cambió el mecanismo) |
 | A21, A26, A27, A31, A33 | ✅ |
-| **A38** — framing con guion adverso | ⚠️ **parcial**: el conteo en bytes sí, el guion con la línea separadora no |
-| **A8–A12** — corrupción del stream | ⚠️ **parcial**: R6.2 y R6.5 sin cobertura propia |
+| **A38** — framing con guion adverso | ✅ `EjecucionTest` (conteo en bytes y la línea separadora, los dos casos de R7.9) |
+| **A8–A12** — corrupción del stream | ✅ `DesenmarcadoTest`, caja negra contra la cadena real `docker-java` → `Acumulador` → `Docker.logs` (R6.2 y R6.5 reescritas en §6 con lo que la cadena real garantiza) |
 | **A35, A37** — validaciones del catálogo y `perfilHash` | ✅ `CatalogoTest`, 19 tests. La causa R4.1 es inalcanzable con las constantes actuales y se fija como relación, no como excepción |
 | **A40** — verificación de versión del daemon al arrancar | ✅ `DockerVersionTest` (comparación pura + daemon de prueba), y contra Docker real en `ProtocoloIT` |
 | **A41** — rechazo de transporte `tcp://` al arrancar | ✅ `DockerTransporteTest` (comparación pura, sin daemon) |
@@ -906,13 +950,17 @@ tiene un motivo distinto y una salida distinta:
 
 | Falta | Qué es | Cómo se salda |
 |---|---|---|
-| **A38** (mitad) | **Deuda**, barata | Un caso más con un guion que contenga la línea separadora |
-| **A8–A12** | **Deuda o cambio de requisito** | Tests contra el acumulador, **o** aceptar por escrito que R6.2 y R6.5 dejan de ser requisitos ahora que el desenmarcado es de la librería |
 | **A2** | **Decisión ya tomada** | Nada: hay una sola implementación |
 | **A3–A5, A13–A20, A22–A25, A28–A30** | **Cambio de dueño** | Su lugar es la suite de la imagen, no la del ejecutor |
 
 Meterlas en la misma bolsa es lo que después se defiende mal: «faltan tests» invita a que pregunten
-por el peor de los cinco, y sólo uno de los cinco es realmente un agujero.
+por el peor de los dos, y ninguno de los dos es realmente un agujero de este componente.
+
+> **A38 y A8–A12 salieron de esta tabla (11-sep-2026).** Las dos eran deuda barata y las dos se
+> saldaron con test: A38 con el caso del guion adverso (`EjecucionTest`) y A8–A12 con
+> `DesenmarcadoTest` contra la cadena real. Ninguna quedó como «cambio de requisito» — R6.2 y R6.5
+> siguen siendo afirmaciones de la spec, reescritas en §6 con lo que la cadena real garantiza en vez
+> de lo que garantizaba nuestro demultiplexor.
 
 ---
 
@@ -965,17 +1013,18 @@ tabla.~~ **Sin contraparte**: la implementación en Node quedó de lado (§13). 
 se conserva como lo que es —una estimación que nunca se contrastó— y **NO DEBE** citarse como si
 fuera una medición.
 
-**R14.2** — El objetivo de R11.5 (< 400 líneas) **no se cumplió y ya no va a cumplirse**: 1064
-líneas es 2,6× el objetivo. Corresponde una de dos cosas, y hay que elegir explícitamente: bajar el
-alcance del componente, o **cambiar el objetivo dejando escrito el argumento nuevo**. Lo que no
-corresponde es dejar el número en 400 y las líneas en 1064, porque un requisito que todos saben que
-no se cumple deja de disciplinar nada.
+**R14.2** — ~~El objetivo de R11.5 (< 400 líneas) no se cumplió y ya no va a cumplirse: 1064 líneas
+es 2,6× el objetivo. Corresponde una de dos cosas, y hay que elegir explícitamente: bajar el alcance
+del componente, o cambiar el objetivo dejando escrito el argumento nuevo.~~ **Elegido (11-sep-2026):
+se cambió el objetivo.** R11.5 quedó derogada con el argumento por escrito en §11.5: el número se
+sabía incumplido y dejarlo escrito no disciplinaba nada. Lo que no correspondía —dejar el número en
+400 y las líneas en 1064 sin elegir— ya no es el estado de este documento.
 
 **R14.1** — Terminadas las implementaciones, **DEBE** hacerse una revisión línea por línea de la que
 se elija, por dos personas que no la escribieron, con las observaciones anotadas y versionada en el
 repo. El argumento de que elegimos un lenguaje que el equipo puede auditar solo vale si efectivamente
-lo auditamos: «podemos leerlo» es una hipótesis, «lo leímos» es evidencia. **Con R11.5 incumplida
-por 2,6×, ésta es la única garantía de auditabilidad que le queda al componente, y sigue pendiente.**
+lo auditamos: «podemos leerlo» es una hipótesis, «lo leímos» es evidencia. **Con R11.5 derogada
+(§11.5), ésta es la única garantía de auditabilidad que le queda al componente, y sigue pendiente.**
 
 ---
 
