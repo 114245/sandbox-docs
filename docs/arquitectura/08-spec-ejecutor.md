@@ -56,7 +56,7 @@
 
 | # | Cambio | Dónde | Impacto |
 |---|---|---|---|
-| **C7** | **Catálogo de perfiles.** La imagen y los límites del contenedor dejan de ser constantes de compilación y salen del **perfil** que elige el request. El perfil es nuestro, versionado, inmutable y cargado al arrancar. | §3.1, §3.3, §4.4, A34–A37 (dos de ellos sin implementar, §13.8) | **P1 cambia de forma, no de fondo.** El cliente elige de un conjunto cerrado; sigue sin poder escribir un número |
+| **C7** | **Catálogo de perfiles.** La imagen y los límites del contenedor dejan de ser constantes de compilación y salen del **perfil** que elige el request. El perfil es nuestro, versionado, inmutable y cargado al arrancar. | §3.1, §3.3, §4.4, A34–A37 (§13.8) | **P1 cambia de forma, no de fondo.** El cliente elige de un conjunto cerrado; sigue sin poder escribir un número |
 | **C8** | **Header `X-Perfil: <id>@<version>`.** Nuevo, obligatorio. `400` si falta o está malformado; **`422` nuevo** si el formato es válido pero la clave no está en el catálogo. | §3.1, §3.3 | Un header más y un código de estado más |
 | **C9** | **Modelo de dos capas y framing de tres documentos.** El stdin pasa de dos documentos (nonce y tar) a **tres** (nonce, largo + guion de la capa 2, y tar), según R7.2. El entrypoint pasa a ser `capa1.sh`. | §4.1, §5, §7 | Es el cambio de fondo del V4: la evaluación (capa 2) la escribe el Grupo 5, el aislamiento (capa 1) lo escribimos nosotros |
 | **C10** | **La respuesta pasó de 10 a 13 campos**: `perfilId`, `perfilVersion` y `perfilHash` al final. El hash del guion se **calcula al cargar**, nunca se declara. | §3.1 | El orden importa: se agregaron al final para que el test que fija el orden se extienda en vez de reescribirse |
@@ -754,21 +754,42 @@ decorativo sin que nada falle. Cambió el sujeto del assert, no la afirmación.
 spec dejó de ser literalmente constante, y el que reemplaza al golden fijo único como afirmación
 general.
 
-**A35** — *(C7, R4.5)* ❌ **SIN IMPLEMENTAR.** Cada causa de rechazo del catálogo tiene que hacer
-fallar el **arranque del proceso**: JSON inválido, `memoriaMb` sobre `MEMORIA_MAX_MB`, `cpuS` sobre
-`CPU_MAX_S`, violación de R4.1, y guion sobre `MAX_SCRIPT_BYTES`. Una por una. Lo que el test tiene
-que afirmar no es que el perfil se rechaza, sino **cuándo**: al arrancar, no al ejecutar. Hoy no hay
-ninguna clase de test sobre el catálogo, así que las cinco validaciones de R4.5 están escritas en el
-código y **afirmadas por este documento sin respaldo**. Es el hueco más grande que dejó C7.
+**A35** — *(C7, R4.5)* ✅ Cada causa de rechazo del catálogo tiene que hacer fallar el **arranque
+del proceso**: JSON inválido, `memoriaMb` sobre `MEMORIA_MAX_MB`, `cpuS` sobre `CPU_MAX_S`,
+violación de R4.1, y guion sobre `MAX_SCRIPT_BYTES`. Una por una. Lo que el test tiene que afirmar
+no es que el perfil se rechaza, sino **cuándo**: al arrancar, no al ejecutar.
+
+> **Cómo quedó (`CatalogoTest`).** Los tests ejercitan `Catalogo.cargar`, que en `Main` corre antes
+> de conectar con Docker y de abrir el socket: si tira, el proceso nunca atiende una request. Cada
+> causa se prueba sola, con su valor límite (el techo exacto se acepta, uno más se rechaza) y
+> afirmando el mensaje de **esa** causa, no uno genérico: con `cpuS = CPU_MAX_S + 1` también se
+> viola R4.1, así que un test que buscara sólo «cpuS» seguiría en verde aunque se borrara el techo.
+> Se agregan un archivo inválido entre válidos (el catálogo entero no carga), que sólo se leen
+> `*.json`, y los campos obligatorios faltantes. Verificado con mutaciones: desactivar el techo de
+> memoria, el de CPU o el cálculo del hash pone en rojo el test correspondiente.
+>
+> **La causa «violación de R4.1» hoy es inalcanzable, y hay que decirlo.** `Catalogo` valida
+> `cpuS > CPU_MAX_S` antes que R4.1, y con `CPU_MAX_S = 30` y 60 s de reloj de pared ningún
+> `cpuS ≤ 30` cumple `cpuS * 2 > 60`. La rama existe y no se puede disparar: lo que la sostiene es
+> la relación entre constantes, y eso es lo que fija el test
+> (`a35_r4_1EsInalcanzableHoyConLasConstantesActuales`). Si alguien sube `CPU_MAX_S` por encima de
+> 30, ese test se pone en rojo y avisa que falta uno que dispare la excepción de verdad.
 
 **A36** — *(C8, C10)* `X-Perfil` ausente o malformado ⇒ `400`; bien formado y fuera del catálogo ⇒
 `422`; y la respuesta trae los **trece campos en el orden exacto** de §3.1, con los tres del perfil
 al final.
 
-**A37** — *(C7, R3.6)* ❌ **SIN IMPLEMENTAR.** `perfilHash` tiene que ser el SHA-256 de los bytes
-del guion, calculado al cargar, y un campo `hash` declarado en el JSON del perfil **no** debe
-leerse. R3.6 dice que este campo existe para que el worker pueda reconstruir con qué código exacto
-se evaluó una entrega; mientras no haya test, esa garantía es una intención del código.
+**A37** — *(C7, R3.6)* ✅ `perfilHash` tiene que ser el SHA-256 de los bytes del guion, calculado
+al cargar, y un campo `hash` declarado en el JSON del perfil **no** debe leerse. R3.6 dice que este
+campo existe para que el worker pueda reconstruir con qué código exacto se evaluó una entrega.
+
+> **Cómo quedó.** El test calcula el hash por su cuenta, sin reusar el código bajo prueba, sobre un
+> guion con `ñ` (bytes ≠ caracteres). Y resuelve una ambigüedad de esta misma frase: «no debe
+> leerse» podía significar «se ignora». En el código **no se ignora: hace fallar la carga**. Jackson
+> rechaza por defecto las propiedades desconocidas y el registro del perfil no tiene un campo
+> `hash`, así que un perfil que lo declara no carga, como si fuera JSON inválido. Cumple la
+> propiedad que importa —un hash declarado nunca llega a ser `perfilHash`— y además es la lectura
+> más estricta: un campo con un nombre mal escrito tampoco pasa en silencio.
 
 **A38** — *(C9, R7.11)* ✅ **parcial.** El largo se cuenta en bytes y no en caracteres: el test usa
 un guion con una `ñ` y afirma que el número que viaja es el de bytes —y, explícitamente, que **no**
@@ -799,7 +820,7 @@ confirmado invocando la imagen a mano.
 | A21, A26, A27, A31, A33 | ✅ |
 | **A38** — framing con guion adverso | ⚠️ **parcial**: el conteo en bytes sí, el guion con la línea separadora no |
 | **A8–A12** — corrupción del stream | ⚠️ **parcial**: R6.2 y R6.5 sin cobertura propia |
-| **A35, A37** — validaciones del catálogo y `perfilHash` | ❌ **sin implementar**: no hay ninguna clase de test sobre el catálogo |
+| **A35, A37** — validaciones del catálogo y `perfilHash` | ✅ `CatalogoTest`, 19 tests. La causa R4.1 es inalcanzable con las constantes actuales y se fija como relación, no como excepción |
 | **A2** — golden compartido con Node | ❌ **sin contraparte**: la implementación Node quedó de lado |
 | **A3–A5, A13–A20, A22–A25, A28–A30** | ❌ **fuera del alcance acordado**: son tests de la **imagen**, no del ejecutor. A13–A20 en particular verifican la extracción del tar, que ocurre en `capa1.sh` (I7: el ejecutor no desempaqueta nada) |
 
@@ -808,7 +829,6 @@ tiene un motivo distinto y una salida distinta:
 
 | Falta | Qué es | Cómo se salda |
 |---|---|---|
-| **A35, A37** | **Deuda nueva**, la que dejó C7 | Escribir la clase de tests del catálogo. Es la más urgente: son cinco validaciones de seguridad afirmadas por el documento y sostenidas sólo por lectura del código |
 | **A38** (mitad) | **Deuda**, barata | Un caso más con un guion que contenga la línea separadora |
 | **A8–A12** | **Deuda o cambio de requisito** | Tests contra el acumulador, **o** aceptar por escrito que R6.2 y R6.5 dejan de ser requisitos ahora que el desenmarcado es de la librería |
 | **A2** | **Decisión ya tomada** | Nada: hay una sola implementación |
