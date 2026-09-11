@@ -414,6 +414,17 @@ interpreta acá. Saber leer un reporte es conocimiento de evaluación, y el ejec
 
 Todas las rutas van prefijadas con `/{VERSION_API_DOCKER}`. **R5.0** — La versión **DEBE** ir explícita en el path; **NO DEBE** usarse el default del daemon.
 
+**R5.12** — Al arrancar, antes de aceptar conexiones o programar el barrido, el ejecutor **DEBE**
+confirmar contra el daemon que `MinAPIVersion <= VERSION_API_DOCKER <= ApiVersion` (`GET /version`).
+El mínimo que acepta cada build del Engine varía — un `create` con `v1.43` fue rechazado contra
+29.2.1 y anduvo contra 29.7.2 (`MinAPIVersion 1.40`) — así que fijar la versión (R5.0) no alcanza
+para saber si el daemon la soporta. Si el daemon no responde, o responde rechazando la propia
+llamada versionada (un Engine cuyo rango no la incluye puede devolver `400` a `/v1.43/version`,
+«too old» o «too new» según de qué lado quede),
+o su rango no incluye `VERSION_API_DOCKER`, el arranque **DEBE** fallar de inmediato, sin
+reintentos: el mismo criterio de R4.5 para el catálogo — un error de despliegue tiene que ser
+ruidoso e inmediato, nunca aparecer recién en la primera ejecución de un alumno.
+
 | # | Llamada | Notas |
 |---|---|---|
 | 1 | `POST /containers/create?name=sandbox-<id>` | Cuerpo de §4.1. `Content-Type: application/json` |
@@ -809,6 +820,23 @@ confirmado invocando la imagen a mano.
 > puede **prevenir** que la capa 2 mienta, se puede **detectar**, y la detección tiene que vivir en
 > la capa que la capa 2 no controla.
 
+**A40** — *(R5.12)* ✅ El arranque tiene que fallar si el daemon no soporta `VERSION_API_DOCKER`:
+contra un daemon de prueba compatible pasa; contra uno cuyo rango excluye la versión falla con un
+mensaje que nombra la causa y ambas versiones; contra uno que rechaza la propia llamada
+`/v1.43/version` con `400` ("client version ... is too old") falla como incompatibilidad y no como
+inalcanzable; y contra un daemon inexistente falla como inalcanzable. La comparación numérica
+`MinAPIVersion <= 1.43 <= ApiVersion` vive en una función pura y package-private, probada aparte de
+cualquier daemon: bordes inclusivos, por debajo del mínimo, por encima del máximo, la trampa
+numérica-vs-texto (`"1.9"` ordena después de `"1.43"` como string pero es menor como versión), y
+entradas malformadas.
+
+> **Cómo quedó (`DockerVersionTest`, `ProtocoloIT`).** `DaemonDePrueba` gana una ruta `/version`
+> configurable (`ApiVersion`, `MinAPIVersion`, y un modo que devuelve `400` con el mensaje de "too
+> old"). `DockerVersionTest` cubre la función pura y los cuatro escenarios contra el daemon de
+> mentira; `ProtocoloIT` agrega un test contra Docker real, que se saltea igual que el resto de la
+> suite si no hay daemon escuchando. Verificado con mutación: anular la mitad `MinAPIVersion` de la
+> comparación pone en rojo el caso de rango incompatible.
+
 ### 13.8 Cobertura real, incluido lo que falta
 
 | Grupo | Estado |
@@ -821,6 +849,7 @@ confirmado invocando la imagen a mano.
 | **A38** — framing con guion adverso | ⚠️ **parcial**: el conteo en bytes sí, el guion con la línea separadora no |
 | **A8–A12** — corrupción del stream | ⚠️ **parcial**: R6.2 y R6.5 sin cobertura propia |
 | **A35, A37** — validaciones del catálogo y `perfilHash` | ✅ `CatalogoTest`, 19 tests. La causa R4.1 es inalcanzable con las constantes actuales y se fija como relación, no como excepción |
+| **A40** — verificación de versión del daemon al arrancar | ✅ `DockerVersionTest` (comparación pura + daemon de prueba), y contra Docker real en `ProtocoloIT` |
 | **A2** — golden compartido con Node | ❌ **sin contraparte**: la implementación Node quedó de lado |
 | **A3–A5, A13–A20, A22–A25, A28–A30** | ❌ **fuera del alcance acordado**: son tests de la **imagen**, no del ejecutor. A13–A20 en particular verifican la extracción del tar, que ocurre en `capa1.sh` (I7: el ejecutor no desempaqueta nada) |
 
