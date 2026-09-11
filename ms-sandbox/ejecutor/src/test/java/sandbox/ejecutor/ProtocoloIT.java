@@ -143,6 +143,13 @@ class ProtocoloIT {
                 "sin EOF la capa 1 se cuelga en el cat del bundle hasta el reloj de pared");
     }
 
+    /** A40: el daemon real de este entorno tiene que pasar la verificacion de arranque. */
+    @Test
+    @Timeout(30)
+    void a40_elDaemonRealPasaLaVerificacionDeVersion() {
+        assertDoesNotThrow(docker::verificarVersion);
+    }
+
     /** Que el contenedor termine borrado, por la via normal (I6). */
     @Test
     @Timeout(180)

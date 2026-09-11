@@ -30,6 +30,10 @@ public final class Main {
         ExecutorService hilos = Executors.newVirtualThreadPerTaskExecutor();
 
         Docker docker = Docker.conectar(dockerHost);
+        // A40: confirmar la version del daemon antes de abrir el socket del ejecutor o programar
+        // el barrido. Un Engine incompatible con R5.0 tiene que tirar el arranque aca, no aparecer
+        // recien en la primera ejecucion de un alumno.
+        docker.verificarVersion();
         Ejecucion ejecucion = new Ejecucion(docker, catalogo);
         Barrido barrido = new Barrido(docker, ejecucion.contenedoresEnVuelo());
         Servidor servidor = new Servidor(socketEjecutor, ejecucion, catalogo, hilos);

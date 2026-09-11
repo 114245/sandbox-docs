@@ -69,6 +69,11 @@ final class DaemonDePrueba implements AutoCloseable {
     volatile boolean inspectFalla = false;
     /** No leer nada del canal adjunto, como un contenedor que arranca y no consume stdin (R8.5). */
     volatile boolean consumeStdin = true;
+    /** ApiVersion y MinAPIVersion que devuelve /version (A40). Ambas null = campo ausente. */
+    volatile String apiVersion = "1.43";
+    volatile String minApiVersion = "1.24";
+    /** Contesta /version con 400 "client version ... is too old", como un Engine con minimo alto. */
+    volatile boolean versionRechazaPorVieja = false;
 
     private final ServerSocket escucha;
     private final ExecutorService hilos = Executors.newVirtualThreadPerTaskExecutor();
@@ -142,6 +147,16 @@ final class DaemonDePrueba implements AutoCloseable {
 
         if (ruta.endsWith("/_ping")) {
             texto(out, 200, "OK");
+        } else if (ruta.endsWith("/version")) {
+            if (versionRechazaPorVieja) {
+                json(out, 400, "{\"message\":\"client version " + Constantes.VERSION_API_DOCKER.substring(1)
+                        + " is too old, minimum supported API version is " + minApiVersion + "\"}");
+            } else {
+                StringBuilder cuerpo = new StringBuilder("{\"ApiVersion\":\"").append(apiVersion).append("\"");
+                if (minApiVersion != null) cuerpo.append(",\"MinAPIVersion\":\"").append(minApiVersion).append("\"");
+                cuerpo.append("}");
+                json(out, 200, cuerpo.toString());
+            }
         } else if (ruta.contains("/containers/create")) {
             if (creates201) json(out, 201, "{\"Id\":\"contenedor-de-prueba\",\"Warnings\":[]}");
             else json(out, 500, "{\"message\":\"no\"}");

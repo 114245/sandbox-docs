@@ -3,8 +3,10 @@ package sandbox.ejecutor;
 import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.async.ResultCallback;
 import com.github.dockerjava.api.command.CreateContainerCmd;
+import com.github.dockerjava.api.exception.BadRequestException;
 import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.model.Frame;
+import com.github.dockerjava.api.model.Version;
 import com.github.dockerjava.api.model.WaitResponse;
 import com.github.dockerjava.core.DefaultDockerClientConfig;
 import com.github.dockerjava.core.DockerClientConfig;
@@ -66,6 +68,84 @@ final class Docker implements Closeable {
                 .build();
 
         return new Docker(DockerClientImpl.getInstance(config, transporte), transporte);
+    }
+
+    // ---------------------------------------------------------------- verificacion de arranque (A40)
+
+    /**
+     * Paso 0 del arranque, antes de abrir el socket del ejecutor o programar el barrido. R5.0 fija
+     * la version de la API en {@link Constantes#VERSION_API_DOCKER}, pero el minimo que cada build
+     * del Engine acepta varia: con 29.2.1 el create con v1.43 fue rechazado, con 29.7.2
+     * (MinAPIVersion 1.40) anda. Sin este chequeo el desajuste recien aparecia en la primera
+     * ejecucion de un alumno. Mismo criterio que {@link Catalogo#cargar}: un error de despliegue
+     * tiene que tirar el arranque, nunca una ejecucion individual.
+     *
+     * No hay reintentos: si el daemon no esta listo ahora, no hay motivo para pensar que lo vaya a
+     * estar en el milisegundo siguiente, y un arranque colgado reintentando es peor que uno que
+     * falla ruidoso.
+     */
+    void verificarVersion() {
+        Version version;
+        try {
+            version = docker.versionCmd().exec();
+        } catch (BadRequestException e) {
+            // Un Engine cuyo rango no incluye v1.43 puede no dejar ni pedir /v1.43/version: contesta
+            // 400 con "client version 1.43 is too old, minimum supported API version is 1.44" si
+            // su minimo esta por encima, o "... is too new, maximum supported API version is 1.41"
+            // si su maximo esta por debajo. docker-java surge cualquier 400 como
+            // BadRequestException con ese cuerpo adentro (DefaultInvocationBuilder#execute en
+            // docker-java-core). No se decide aca cual de los dos fue: el cuerpo del daemon lo dice.
+            // Es incompatibilidad de version, no un daemon inalcanzable.
+            throw new IllegalStateException("el daemon Docker rechazo la API "
+                    + Constantes.VERSION_API_DOCKER + ": " + e.getMessage(), e);
+        } catch (RuntimeException e) {
+            throw new IllegalStateException("no se pudo contactar al daemon Docker para verificar "
+                    + "su version (" + e.getClass().getSimpleName() + ")", e);
+        }
+        String minApiVersion = version.getMinAPIVersion();
+        String apiVersion = version.getApiVersion();
+        if (!versionCompatible(minApiVersion, apiVersion, Constantes.VERSION_API_DOCKER)) {
+            throw new IllegalStateException("el daemon Docker no soporta la API "
+                    + Constantes.VERSION_API_DOCKER + " (MinAPIVersion=" + minApiVersion
+                    + ", ApiVersion=" + apiVersion + ")");
+        }
+    }
+
+    /**
+     * Compatible si MinAPIVersion &lt;= requerida &lt;= ApiVersion, comparando major.minor como
+     * numeros: "1.9" es MENOR que "1.43", aunque como string ordene al reves. Funcion pura y
+     * package-private para poder probarla sin un daemon (A40).
+     *
+     * Si el daemon no informa MinAPIVersion (campo ausente antes de la API 1.25) se lo trata como
+     * "0.0": decision conservadora en el sentido de no rechazar por un campo que un daemon viejo
+     * nunca declaro, y de todos modos inofensiva, porque un daemon tan viejo tampoco va a informar
+     * un ApiVersion que llegue a 1.43, asi que la otra mitad de la comparacion lo va a frenar igual.
+     */
+    static boolean versionCompatible(String minApiVersion, String apiVersion, String versionRequerida) {
+        int[] requerida = parsearVersion(versionRequerida);
+        int[] maxima = parsearVersion(apiVersion);
+        if (requerida == null || maxima == null) return false;
+        int[] minima = (minApiVersion == null) ? new int[] {0, 0} : parsearVersion(minApiVersion);
+        if (minima == null) return false;
+        return compararVersion(minima, requerida) <= 0 && compararVersion(requerida, maxima) <= 0;
+    }
+
+    /** "v1.43" o "1.43" -> {1, 43}. null ante cualquier formato que no sea major.minor numerico. */
+    private static int[] parsearVersion(String version) {
+        if (version == null) return null;
+        String limpio = (version.startsWith("v") || version.startsWith("V"))
+                ? version.substring(1) : version;
+        String[] partes = limpio.split("\\.");
+        if (partes.length != 2) return null;
+        try {
+            return new int[] {Integer.parseInt(partes[0].trim()), Integer.parseInt(partes[1].trim())};
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static int compararVersion(int[] a, int[] b) {
+        return a[0] != b[0] ? Integer.compare(a[0], b[0]) : Integer.compare(a[1], b[1]);
     }
 
     // ---------------------------------------------------------------- operaciones de la seccion 5
