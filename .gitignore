@@ -1,2 +1,5 @@
 # Build de Maven: se regenera con `mvn test` / `mvn package`.
 target/
+
+# Configuración local de IntelliJ.
+.idea/
