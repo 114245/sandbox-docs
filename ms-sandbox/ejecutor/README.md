@@ -324,3 +324,19 @@ Una sola corrida verde no prueba que una intermitencia se fue. La evidencia acep
    Ver «Paso 4 del handoff — validado contra Docker real» arriba. Cero divergencias contra la tabla
    de `../../HANDOFF-opcion1.md` §6, y `hostil-paquete`/`hostil-red` quedaron confirmados por primera
    vez a través del ejecutor (antes solo habían corrido con `run.sh`).
+8. ~~`EjecucionTest#elNonceEsDistintoCadaVez` y `#framingDeTresDocumentos` eran intermitentes bajo
+   carga~~ **resuelto** (R5.13 / A41): la causa era que `Docker.Adjunto.close()` le da EOF al
+   contenedor cerrando la conexión adjunta entera, y docker-java no ofrece media-clausura — ese
+   cierre es abortivo (`request.abort()`). Sobre TCP un cierre abortivo llega como *reset*, y un
+   reset hace que el kernel descarte bytes ya escritos pero no leídos todavía del otro lado. Medido
+   con un daemon de mentira por TCP en loopback (200 KB, 24 hilos quemando CPU): Windows truncó
+   115/150, Linux 44/150. Contra Docker real por *unix socket*/*named pipe* no hubo pérdida
+   (60/60 y 39/40). Se hizo exactamente lo que la medición sostiene y nada más: (a) el arranque
+   ahora rechaza cualquier `DOCKER_HOST` que no sea `unix://` o `npipe://` (`Docker.validarTransporte`,
+   llamado desde `Main` antes de conectar), y (b) para no perder cobertura, se agregó un seam de
+   prueba (`Docker.alCerrarAdjunto`, `null`/sin efecto en producción) que deja a los tests esperar
+   la confirmación de recepción antes de cerrar, porque el daemon de prueba sigue siendo TCP (no
+   hay socket Unix de Java que docker-java use en Windows). **Lo que queda pendiente**: si alguna
+   vez hiciera falta soportar `tcp://` en producción, esto no alcanza — haría falta una
+   media-clausura ordenada (`shutdownOutput` sin cerrar la conexión entera) que docker-java hoy no
+   expone.
