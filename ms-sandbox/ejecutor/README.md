@@ -158,18 +158,31 @@ lado, el archivo dejó de ser un contrato entre implementaciones y pasó a ser e
 
 ## Lo que se perdió, dicho explícitamente
 
-`Demultiplexor` desapareció y con él sus tests de corrupción del stream:
+`Demultiplexor` desapareció, y con él el código que abortaba con un tope propio ante un largo de
+frame fuera de rango. Lo que quedó, confirmado contra la cadena real (`DesenmarcadoTest`, ver abajo):
 
 | Antes | Ahora |
 |---|---|
-| R6.2 — largo de frame fuera de rango ⇒ `ErrorDaemon` | lo maneja la librería, sin tope propio |
-| R6.5 — encabezado o payload truncado ⇒ `ErrorDaemon` | la librería corta y devuelve lo que llegó, en silencio |
+| R6.2 — largo de frame fuera de rango ⇒ `ErrorDaemon` propio | sin tope propio: nunca se reserva memoria por el largo declarado (eso lo garantiza el buffer fijo de 1024 bytes de `docker-java`), pero el desenlace ante un largo inválido es `ErrorDaemon` o corte silencioso según qué haya bufferizado el transporte, no una garantía nuestra |
+| R6.5 — encabezado o payload truncado ⇒ `ErrorDaemon` propio | la librería corta y devuelve lo que llegó, en silencio, sin encender `salidaTruncada` (ese campo es solo del tope propio de R6.7) |
 | R6.1 — `Content-Type` inesperado en `/logs` ⇒ `ErrorDaemon` | ya no se mira el content-type |
 
 Lo que **sí** se conservó es la guarda que importaba: si la salida no viene enmarcada, `docker-java`
 la entrega como frames `RAW` y `Acumulador` la rechaza (`AcumuladorTest`,
 `EjecucionTest#r61_salidaSinEnmarcarEsErrorDaemon`). Adivinar que eso es stdout es como se corrompe
 un resultado en silencio, y ese camino sigue cerrado.
+
+**`DesenmarcadoTest` (A8–A12, 11-sep-2026).** En vez de dejar R6.2 y R6.5 como requisitos sin test,
+se armó una suite de caja negra contra la cadena real `docker-java` → `Acumulador` → `Docker.logs`,
+alimentando a `DaemonDePrueba` con encabezados de frame armados a mano. El hallazgo no fue el
+esperado leyendo el fuente de `docker-java`: se esperaba que un largo declarado de 4 GiB abortara
+siempre con una excepción de la librería (el `uint32` se acumula en un `int` y queda negativo), y en
+cambio el desenlace depende de si el transporte tiene algo bufferizado en ese instante — con datos
+bufferizados, `SessionInputBufferImpl` (httpclient5) revienta con `ArrayIndexOutOfBoundsException` y
+sale como `ErrorDaemon`; sin nada bufferizado, la lectura da fin de stream y termina en silencio,
+igual que cualquier otro truncamiento de R6.5. Las dos ramas cumplen lo único que se puede seguir
+prometiendo: nunca se reserva memoria por el largo declarado, y el desenlace es inmediato. Ver §6 de
+la spec para la reescritura completa de R6.2 y R6.5.
 
 ## El EOF de stdin: lo único que `docker-java` no hace
 
@@ -192,12 +205,13 @@ El mismo cierre resuelve R8.5. El bucle de escritura vive en un hilo de la libre
 | A1, A2 | `SpecTest`, `EjecucionTest#elCuerpoDeCreateEsElGolden` | ✅ referencia regenerada, ver arriba |
 | A6 | `ProtocoloIT` | ✅ contra Docker real, nativo en Windows, con los tres documentos |
 | A7 | `EjecucionTest#r61_salidaSinEnmarcarEsErrorDaemon` | ✅ por tipo de frame, ya no por content-type |
-| A8–A12 | `AcumuladorTest` | ⚠️ parcial: el desenmarcado es de la librería (ver «Lo que se perdió») |
+| A8–A12 | `AcumuladorTest`, `DesenmarcadoTest` | ✅ `AcumuladorTest` cubre lo que sigue siendo nuestro (R6.4, R6.6, R6.7); `DesenmarcadoTest` cubre la cadena real `docker-java` → `Acumulador` → `Docker.logs` (ver «Lo que se perdió») |
 | A21 | `ReporteTest`, `EjecucionTest` | ✅ |
 | A26, A27 | `ServidorTest` | ✅ |
 | **A31** *(C2)* | `EjecucionTest#a31_oomKilledVieneDelInspect`, `#a31_elInspectQueFallaNoAbortaLaEjecucion` | ✅ más `#r510_elInspectTambienCorreEnTimeout` |
 | **A32** *(C1)* | `SpecTest#a32_ulimitCpuYSuRelacionConElRelojDePared` | ✅ el ulimit sale del perfil; el assert de R4.1 quedó sobre `Constantes.CPU_MAX_S`, el techo que `Catalogo` hace cumplir a cualquier perfil |
 | **A33** *(C3)* | `EjecucionTest#a33_laEscrituraQueNoAvanzaNoRetieneElCupo` | ✅ ahora por cierre del canal, no por half-close |
+| **A38** *(C9, R7.9)* | `EjecucionTest#a38_unGuionConLaLineaSeparadoraNoRompeElFraming` | ✅ el guion con la línea separadora, además del conteo en bytes |
 | A3–A5, A13–A20, A22–A25, A28–A30 | — | fuera del alcance acordado: necesitan la imagen `sandbox-runner` de producción |
 
 Además de la suite de §13, hay tests que fijan invariantes que la spec afirma pero no numera:
@@ -309,8 +323,10 @@ Una sola corrida verde no prueba que una intermitencia se fue. La evidencia acep
 1. ~~La spec `08-spec-ejecutor.md` está desactualizada~~ **resuelto** (commit `b008f58`): se
    actualizó entera al catálogo de perfiles — §3, §4, §7, §11-§14 — y sigue creciendo con cada
    cambio (última incorporación: R5.12 / A40, ítem 4 de esta lista).
-2. **R11.5 (< 400 líneas) sigue sin cumplirse**, y ahora por más: ~1066 de código efectivo, con
-   `Catalogo` como el módulo nuevo más grande. El argumento de §14 no cambia; el número sí.
+2. ~~R11.5 (< 400 líneas) sigue sin cumplirse~~ **resuelto (11-sep-2026): R11.5 quedó derogada.**
+   El código propio mide ~1064 líneas efectivas (§14), 2,6× el objetivo, y ya no iba a bajar. El
+   argumento de auditabilidad no se cayó —sigue vivo en R14.1, la revisión línea por línea— pero el
+   número que debía disciplinarlo sí, con el argumento por escrito en §11.5 de la spec.
 3. ~~R10.2 quedó desactualizada por C1~~ **resuelto**: el texto actual de R10.2 ya dice «10 veces
    mayor» (600 s contra 60 s), no «20 veces».
 4. ~~La versión mínima de API que acepta el daemon varía entre builds del Engine~~ **hecho**: el
