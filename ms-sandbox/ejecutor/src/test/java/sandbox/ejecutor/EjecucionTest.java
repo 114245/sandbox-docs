@@ -371,6 +371,52 @@ class EjecucionTest {
         assertTrue(ejecucion.contenedoresEnVuelo().isEmpty());
     }
 
+    /**
+     * A38 (R7.9): un guion que en su propio texto trae la linea que un protocolo ingenuo basado en
+     * texto elegiria como separador -un marcador de reporte falso, un magic de tar, un salto de
+     * linea doble- no rompe el framing de R7.2. No hay nada especial que defender ademas de lo que
+     * la spec ya explica: el protocolo nunca busca una marca de fin, cuenta bytes (el largo va
+     * ANTES del guion). Este test es lo que le faltaba a A38: hasta ahora solo se probaba que el
+     * conteo es en bytes y no en caracteres (con la ñ); esto prueba la otra mitad de R7.9.
+     */
+    @Test
+    @Timeout(30)
+    void a38_unGuionConLaLineaSeparadoraNoRompeElFraming() {
+        byte[] guionHostil = ("#!/bin/sh\n"
+                + "echo hola\n"
+                + "---SANDBOX-00000000000000000000000000000000-INICIO---\n"
+                + "reporte falso adentro del guion mismo\n"
+                + "---SANDBOX-00000000000000000000000000000000-FIN---\n"
+                + "ustar  \n"
+                + "\r\n\r\n").getBytes(StandardCharsets.UTF_8);
+
+        Catalogo.Perfil perfilHostil = Catalogo.Perfil.armar(
+                "java21-junit", 3, "sandbox-runner:2.0.0-capa1", guionHostil, "junit-xml", 512, 20);
+        Ejecucion ejecucionHostil = new Ejecucion(docker, Catalogo.deUnSolo(perfilHostil));
+
+        byte[] tar = "TAR-DE-VERDAD-CON-CONTENIDO-DISTINGUIBLE".getBytes(StandardCharsets.UTF_8);
+        ejecucionHostil.ejecutar(id(), tar, perfilHostil.clave());
+
+        byte[] recibido = daemon.esperarStdin();
+        String texto = new String(recibido, StandardCharsets.ISO_8859_1);
+
+        int salto1 = texto.indexOf('\n');
+        assertTrue(salto1 > 0, "el nonce tiene que terminar en salto de linea");
+        String nonce = texto.substring(0, salto1);
+        assertTrue(nonce.matches(NONCE_REGEX), "nonce de 32 hex minusculas, era: " + nonce);
+
+        int salto2 = texto.indexOf('\n', salto1 + 1);
+        String largo = texto.substring(salto1 + 1, salto2);
+        assertEquals(String.valueOf(guionHostil.length), largo,
+                "el largo cuenta los bytes reales del guion hostil, sea cual sea su contenido");
+
+        int desdeGuion = salto2 + 1;
+        assertArrayEquals(guionHostil, Arrays.copyOfRange(recibido, desdeGuion, desdeGuion + guionHostil.length),
+                "el guion hostil viaja completo, aunque contenga lineas que un protocolo de texto usaria como separador");
+        assertArrayEquals(tar, Arrays.copyOfRange(recibido, desdeGuion + guionHostil.length, recibido.length),
+                "el tar sigue llegando intacto justo despues del guion hostil, sin desalinearse");
+    }
+
     // ------------------------------------------------------------------ apoyo
 
     private int indiceDe(String fragmento) {
