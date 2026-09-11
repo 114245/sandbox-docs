@@ -29,6 +29,9 @@ public final class Main {
         ScheduledExecutorService reloj = Executors.newScheduledThreadPool(2, Thread.ofPlatform().daemon().factory());
         ExecutorService hilos = Executors.newVirtualThreadPerTaskExecutor();
 
+        // R5.13: unix:// o npipe:// unicamente. Antes de tocar el socket: un DOCKER_HOST invalido
+        // es un error de despliegue, no algo que deba descubrirse en la primera ejecucion.
+        Docker.validarTransporte(dockerHost);
         Docker docker = Docker.conectar(dockerHost);
         // A40: confirmar la version del daemon antes de abrir el socket del ejecutor o programar
         // el barrido. Un Engine incompatible con R5.0 tiene que tirar el arranque aca, no aparecer

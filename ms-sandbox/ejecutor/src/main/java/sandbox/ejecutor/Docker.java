@@ -19,9 +19,11 @@ import java.io.IOException;
 import java.net.URI;
 import java.time.Duration;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.function.IntConsumer;
 
 /**
  * Las operaciones de la seccion 5 sobre docker-java.
@@ -43,13 +45,29 @@ final class Docker implements Closeable {
     private final DockerClient docker;
     private final DockerHttpClient transporte;
 
+    /**
+     * Seam de prueba para R5.13, nada mas: {@link DaemonDePrueba} es TCP (ver su javadoc, no hay
+     * socket Unix de Java que ande contra docker-java en Windows) y el cierre del canal adjunto es
+     * abortivo, asi que sobre TCP siempre llega al otro lado como reset. Este hook deja que un test
+     * espere a que esos bytes ya esten confirmados recibidos ANTES de cerrar, para que la corrida
+     * no dependa de ganarle una carrera al kernel. En produccion nunca se asigna (queda null) y
+     * {@link Adjunto#close()} no hace nada distinto: el transporte esta restringido a unix/npipe
+     * (ver {@link #validarTransporte}), que es exactamente donde la medicion (ver README, seccion
+     * Pendientes) no mostro perdida. Esto no arregla la causa de fondo -seguiria haciendo falta una
+     * media-clausura ordenada, que docker-java no expone-, solo evita que la suite dependa de una
+     * carrera que no existe en produccion porque ahi TCP esta prohibido.
+     */
+    volatile IntConsumer alCerrarAdjunto;
+
     private Docker(DockerClient docker, DockerHttpClient transporte) {
         this.docker = docker;
         this.transporte = transporte;
     }
 
     /**
-     * @param dockerHost unix:///var/run/docker.sock, npipe:////./pipe/docker_engine o tcp://host:puerto
+     * @param dockerHost unix:///var/run/docker.sock o npipe:////./pipe/docker_engine. Tambien acepta
+     *         tcp://host:puerto, pero solo para {@link DaemonDePrueba}: en produccion {@code Main}
+     *         lo rechaza antes con {@link #validarTransporte} (R5.13).
      */
     static Docker conectar(String dockerHost) {
         DockerClientConfig config = DefaultDockerClientConfig.createDefaultConfigBuilder()
@@ -68,6 +86,46 @@ final class Docker implements Closeable {
                 .build();
 
         return new Docker(DockerClientImpl.getInstance(config, transporte), transporte);
+    }
+
+    // ---------------------------------------------------------------- restriccion de transporte (R5.13)
+
+    /**
+     * Paso -1 del arranque, antes incluso de {@link #conectar}: el unico transporte permitido en
+     * produccion es unix:// o npipe://. Deliberadamente NO va adentro de {@link #conectar}, porque
+     * los tests conectan contra {@link DaemonDePrueba} (que es TCP, ver su javadoc) a traves de ese
+     * mismo metodo.
+     *
+     * <b>Por que.</b> {@code Docker.Adjunto.close()} le da EOF al stdin del contenedor cerrando la
+     * conexion adjunta entera, y docker-java no ofrece una media-clausura: ese cierre es abortivo
+     * (termina en {@code request.abort()} de Apache HttpClient5). Sobre TCP un cierre abortivo llega
+     * al otro lado como reset (RST), y un RST hace que el kernel receptor descarte los bytes que ya
+     * llegaron pero que la aplicacion todavia no leyo: la entrega no es atomica con la escritura.
+     * Se midio con un daemon de mentira por TCP en loopback: con 24 hilos quemando CPU y 150
+     * ejecuciones de un tar de 200 KB, Windows trunco 115/150 y Linux 44/150; incluso un stdin
+     * chico de 56 bytes se perdio entero 2/300 veces en reposo y 31/300 bajo carga. Contra Docker
+     * real por unix socket (Linux) 60/60 llegaron completos, y por named pipe (Windows) 39/40 (mas
+     * un ERROR_DAEMON sin explicacion, no truncamiento). Por eso unix:// y npipe:// quedan como los
+     * unicos transportes de produccion: son los que la medicion mostro sin perdida.
+     */
+    static void validarTransporte(String dockerHost) {
+        String esquema = esquemaDe(dockerHost);
+        if (!"unix".equals(esquema) && !"npipe".equals(esquema)) {
+            throw new IllegalStateException("DOCKER_HOST=\"" + dockerHost + "\" no es valido: el "
+                    + "ejecutor solo admite unix:// o npipe://. El cierre del canal adjunto "
+                    + "(Docker.Adjunto.close) es abortivo -no hay media-clausura en docker-java- y "
+                    + "sobre tcp:// eso llega al contenedor como un reset que puede truncar stdin ya "
+                    + "escrito pero no leido todavia del otro lado; sobre unix socket o named pipe la "
+                    + "medicion no mostro esa perdida.");
+        }
+    }
+
+    /** El esquema en minusculas ("unix", "npipe", "tcp", ...), o null si no hay uno reconocible. */
+    private static String esquemaDe(String dockerHost) {
+        if (dockerHost == null) return null;
+        int fin = dockerHost.indexOf("://");
+        if (fin <= 0) return null;
+        return dockerHost.substring(0, fin).toLowerCase(Locale.ROOT);
     }
 
     // ---------------------------------------------------------------- verificacion de arranque (A40)
@@ -185,7 +243,7 @@ final class Docker implements Closeable {
             cerrarCallejero(callback);
             throw new ErrorDaemon("attach interrumpido");
         }
-        return new Adjunto(callback);
+        return new Adjunto(callback, entrada.total(), alCerrarAdjunto);
     }
 
     /**
@@ -196,10 +254,17 @@ final class Docker implements Closeable {
      * InputStream hasta el final y despues se queda quieto, con la conexion abierta. Como la spec
      * crea el contenedor con StdinOnce, cerrar la conexion adjunta ES el EOF. Sin este cierre la
      * capa 1 se cuelga en el {@code cat} del bundle hasta el reloj de pared.
+     *
+     * @param totalBytesEntrada cuantos bytes tenia la {@link Entrada} de esta ejecucion; solo se usa
+     *         para el hook de prueba de R5.13, ver {@link Docker#alCerrarAdjunto}.
+     * @param alCerrarAdjunto el hook de prueba, o null en produccion (comportamiento identico).
      */
-    record Adjunto(ResultCallback.Adapter<Frame> callback) implements Closeable {
+    record Adjunto(ResultCallback.Adapter<Frame> callback, int totalBytesEntrada,
+                    IntConsumer alCerrarAdjunto) implements Closeable {
         @Override
         public void close() {
+            // R5.13: solo un test lo asigna. En produccion es null y esta linea no hace nada.
+            if (alCerrarAdjunto != null) alCerrarAdjunto.accept(totalBytesEntrada);
             cerrarCallejero(callback);
         }
     }

@@ -58,6 +58,31 @@ final class DaemonDePrueba implements AutoCloseable {
         return stdinRecibido;
     }
 
+    /** Bytes del canal adjunto contabilizados a medida que se leen. Se resetea al empezar cada attach. */
+    private volatile int recibidos;
+
+    /**
+     * Seam de prueba para R5.13 (ver el javadoc de {@link sandbox.ejecutor.Docker#alCerrarAdjunto}):
+     * espera a que el attach en curso haya CONFIRMADO recibir {@code total} bytes antes de que el
+     * llamador cierre el canal adjunto. Existe unicamente porque este daemon es TCP: sin esto, el
+     * ejecutor podia cerrar (cierre abortivo, ver R5.13) antes de que el kernel terminara de
+     * entregarle esos bytes al hilo que los lee aca, y esa carrera -no el problema real- era la que
+     * hacia intermitentes {@code EjecucionTest#elNonceEsDistintoCadaVez} y
+     * {@code EjecucionTest#framingDeTresDocumentos}. No cambia nada de produccion: alla el
+     * transporte esta restringido a unix/npipe, donde la medicion no mostro esa perdida, y de
+     * cualquier forma esto seguiria sin ser un arreglo de la causa de fondo -haria falta una
+     * media-clausura ordenada que docker-java no expone.
+     *
+     * @return true si se llego a confirmar el total (o si el daemon no lee nada, R8.5, caso en el
+     *         que este metodo no puede ni debe esperar nunca).
+     */
+    boolean esperarRecepcion(int total) {
+        if (!consumeStdin) return true;   // R8.5: nunca va a llegar nada, no hay que esperar
+        long limite = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (recibidos < total && System.nanoTime() < limite) Thread.onSpinWait();
+        return recibidos >= total;
+    }
+
     // ---- comportamiento configurable
     volatile int exitCode = 0;
     volatile byte[] logs = new byte[0];
@@ -112,6 +137,7 @@ final class DaemonDePrueba implements AutoCloseable {
         if (ruta.contains("/attach")) {
             stdinRecibido = null;
             stdinCerrado = false;
+            recibidos = 0;
             out.write(("HTTP/1.1 101 UPGRADED\r\n"
                     + "Content-Type: application/vnd.docker.multiplexed-stream\r\n"
                     + "Connection: Upgrade\r\nUpgrade: tcp\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1));
@@ -127,7 +153,7 @@ final class DaemonDePrueba implements AutoCloseable {
                 int r;
                 // Termina cuando el ejecutor cierra el canal adjunto, que es el EOF de stdin del
                 // contenedor: con docker-java no hay media-clausura, el cierre es el unico final.
-                while ((r = in.read(buffer)) != -1) recibido.write(buffer, 0, r);
+                while ((r = in.read(buffer)) != -1) { recibido.write(buffer, 0, r); recibidos += r; }
             } catch (IOException cierreAbrupto) {
                 // Cerrar la conexion entera -que es como docker-java produce el EOF- llega de este
                 // lado como un reset, no como un -1 limpio. Para el daemon real es lo mismo: el

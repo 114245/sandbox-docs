@@ -36,6 +36,10 @@ class EjecucionTest {
     void levantar() throws Exception {
         daemon = new DaemonDePrueba();
         docker = Docker.conectar(daemon.dockerHost());
+        // R5.13: seam de prueba, ver el javadoc de Docker#alCerrarAdjunto. DaemonDePrueba es TCP
+        // (unico transporte que sabe hablar en las tres plataformas), asi que sin esto el cierre
+        // abortivo del canal adjunto puede ganarle la carrera al kernel y truncar lo ya escrito.
+        docker.alCerrarAdjunto = total -> daemon.esperarRecepcion(total);
         ejecucion = new Ejecucion(docker, CATALOGO);
     }
 
