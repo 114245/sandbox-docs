@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Los guiones corren adentro de un contenedor Linux: con CRLF, `sh` lee `\r` como
+# parte de cada comando y falla. Ademas el campo `script` de cada perfil tiene que
+# ser el .sh byte a byte, y un checkout con core.autocrlf=true lo romperia.
+*.sh text eol=lf
