@@ -6,7 +6,7 @@
 # TRES documentos, levanta el contenedor y muestra el sobre.
 #
 #   ./probar-capa1.sh bundles/ok-suma
-#   ./probar-capa1.sh bundles/hostil-cpu perfiles/java21-junit.sh
+#   ./probar-capa1.sh bundles/hostil-cpu ../perfiles/java21-junit.sh
 #
 # El punto de este script es que el framing lo arma alguien de afuera del
 # contenedor, igual que lo hara Ejecucion.java. Si esto anda, portarlo a Java
@@ -16,7 +16,7 @@ set -uo pipefail
 cd "$(dirname "$0")"
 
 BUNDLE_DIR="${1:-}"
-PERFIL="${2:-perfiles/java21-junit.sh}"
+PERFIL="${2:-../perfiles/java21-junit.sh}"
 
 if [ -z "$BUNDLE_DIR" ] || [ ! -d "$BUNDLE_DIR" ]; then
   echo "uso: $0 <directorio-del-bundle> [script-del-perfil]" >&2
