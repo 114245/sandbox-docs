@@ -67,7 +67,8 @@ La pregunta bien planteada es entonces triple:
 
 ## 2. Qué hace hoy cada capa, exacto
 
-El bloque final de `sandbox/runner/entrypoint.sh` (líneas 419‑456) hace **cinco** cosas, y conviene
+El bloque final del `entrypoint.sh` de una sola capa (líneas 419‑456; eliminado del repo, ver
+historial de git) hacía **cinco** cosas, y conviene
 mirarlas de a una, porque no todas corren la misma suerte.
 
 | # | Guarda | Qué mira | ¿Necesita saber el formato? | ¿Puede vivir afuera? |
@@ -308,13 +309,14 @@ El test se reformuló para medir la misma propiedad sin la pieza que falta:
 Si el XML con `tests="0"` viaja igual, la respuesta es sí y la premisa se sostiene. Si el reporte
 llegara ausente o vacío, D16 volvería a ser una mudanza de guarda de seguridad.
 
-El arnés es `sandbox/runner/run.sh`, que es justamente *"lo que después va a hacer el worker, a
-mano"*. Se neutralizó **sólo la decisión** de la guarda 3 —el `morir`— y se dejó el conteo en el
-sobre, para poder comparar el número.
+El arnés era `run.sh`, el harness de una sola capa (eliminado del repo junto con `entrypoint.sh` y
+`build.sh` al adoptar el modelo de dos capas; ver historial de git), que era justamente *"lo que
+después va a hacer el worker, a mano"*. Se neutralizó **sólo la decisión** de la guarda 3 —el
+`morir`— y se dejó el conteo en el sobre, para poder comparar el número.
 
-> **Ojo con el nombre.** Ese `run.sh` es el arnés de prueba nuestro, y no tiene nada que ver con el
-> `run.sh` del sándwich, que es el script de evaluación del Grupo 5. La colisión de nombres es
-> desafortunada y conviene renombrar el arnés cuando se toque P9.
+> **Ojo con el nombre.** Ese `run.sh` era el arnés de prueba nuestro, y no tenía nada que ver con el
+> `run.sh` del sándwich, que es el script de evaluación del Grupo 5. La colisión de nombres fue
+> desafortunada; el harness de dos capas equivalente es `pruebas/probar-capa1.sh`.
 
 ### 8.2 Los números
 
@@ -356,6 +358,11 @@ Los pasos 4 y 5 —perfil con `reportFormat` desconocido ⇒ `ERROR_INTERNO`, y 
 worker. Quedan como criterio de aceptación de ese trabajo, y hay que escribirlos junto con él.
 
 ### 8.5 Reproducirlo
+
+> **Nota de la reorganización del repo.** `run.sh`, `build.sh` y `entrypoint.sh` (el runner de una
+> sola capa) se eliminaron del repo al adoptar el modelo de dos capas; el bloque de abajo es el
+> registro histórico de cómo se reprodujo el experimento en su momento, no un comando ejecutable hoy.
+> Ver historial de git para recuperar esos scripts si hiciera falta repetir el experimento.
 
 ```sh
 cd sandbox/runner
@@ -402,5 +409,5 @@ implementación:
 - [`04-ms-sandbox-worker.md`](./04-ms-sandbox-worker.md) §6 — el mapeo de veredictos y la guarda que ya existe.
 - [`08-spec-ejecutor.md`](./08-spec-ejecutor.md) §5 — el sobre, que cambia de campos.
 - [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) §4.6 y §4.7 — `reportFormat` y el smoke test, tal como se los planteamos al Grupo 5.
-- `sandbox/runner/entrypoint.sh` líneas 419‑456 — las cinco guardas del §2.
+- `entrypoint.sh` (de una sola capa, eliminado del repo; ver historial de git) líneas 419‑456 — las cinco guardas del §2.
 - [`README.md`](./README.md) — estado de decisiones.

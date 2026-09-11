@@ -9,7 +9,9 @@
 > de lo que falta acordar.
 >
 > Dos de las cuatro decisiones abiertas salieron de la **suite de entregas hostiles**
-> (`sandbox/runner/suite-hostil.sh`), que se corrió después de escribir los otros documentos.
+> (`suite-hostil.sh`, un arnés de la línea de base de una sola capa, eliminado del repo junto con
+> `run.sh`/`entrypoint.sh`; ver historial de git), que se corrió después de escribir los otros
+> documentos.
 
 ---
 
@@ -270,7 +272,7 @@ Dos bugs de implementación salieron de esa misma prueba, y los dos valen para l
 - **El fd 3 lo heredaban los hijos del alumno**, que podían escribir un sobre falso. Se cierra
   con `3>&-` antes de lanzar la JVM.
 
-📄 *Detalle: [`03`](./03-ms-sandbox-ejecucion.md) §1.6 (los tropiezos de Java) y §4.3 (los relojes) · `sandbox/runner/README.md`*
+📄 *Detalle: [`03`](./03-ms-sandbox-ejecucion.md) §1.6 (los tropiezos de Java) y §4.3 (los relojes) · `ms-sandbox/imagenes/README.md`*
 
 ---
 
@@ -425,7 +427,7 @@ De la lista de [`00`](./00-propuesta-ms-sandbox.md) §10, lo que sigue abierto:
 
 | # | Pendiente | Estado |
 |---|---|---|
-| 4 | Casos hostiles a nivel **tar**: enlaces simbólicos y duros | Abierto. No se pueden expresar como bundle de directorios porque `run.sh` arma el tar — necesitan un harness que lo fabrique a mano |
+| 4 | Casos hostiles a nivel **tar**: enlaces simbólicos y duros | Abierto. No se pueden expresar como bundle de directorios porque el harness arma el tar a partir de `src/`/`test/` — necesitan un harness que lo fabrique a mano |
 | 6 | Cachear la suite de tests compilada por versión de desafío | Abierto. Bloqueado por la definición con T03: ¿una versión publicada es **inmutable**? |
 | 7 | La suite hostil corriendo en **CI** | Abierto. La suite existe y pasa; falta el pipeline |
 | 8 | Contrato **OpenAPI** y un stub para T05 | Abierto |

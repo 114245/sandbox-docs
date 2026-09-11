@@ -1,34 +1,34 @@
 # Ejecutor de `ms-sandbox` — especificación de requerimientos
 
 > **Tema 06 — Sandbox / Runtime.**
-> Contrato **independiente del lenguaje** del sidecar ejecutor. Este documento es la única fuente de verdad para dos implementaciones paralelas —una en Java 21, otra en Node 22 + TypeScript— que deben ser **funcionalmente indistinguibles** y pasar la misma suite de aceptación (§13).
+> Contrato **independiente del lenguaje** del sidecar ejecutor. Se escribió como fuente de verdad para dos implementaciones paralelas —una en Java 21, otra en Node 22 + TypeScript—; **la implementación en Node quedó de lado**, así que hoy es la spec de una sola. La independencia del lenguaje se conserva a propósito: es lo que hace que §13 siga siendo una suite de aceptación y no la descripción de un programa.
 
-**Cómo se usa este documento.** Todo lo que dice `DEBE` es obligatorio y verificable con un test de §13. `NO DEBE` es una prohibición: si una implementación lo hace, está mal aunque funcione. `DEBERÍA` es una recomendación fuerte que se puede desviar dejando el motivo escrito en el código. Todo valor numérico está en §4 y es una **constante de compilación**, nunca un parámetro de request.
+**Cómo se usa este documento.** Todo lo que dice `DEBE` es obligatorio y verificable con un test de §13. `NO DEBE` es una prohibición: si una implementación lo hace, está mal aunque funcione. `DEBERÍA` es una recomendación fuerte que se puede desviar dejando el motivo escrito en el código. Todo valor numérico está en §4. Los de §4.3 son **constantes de compilación**; los cuatro campos que dependen del perfil (§4.4) salen de un **catálogo versionado que escribimos nosotros**. Ninguno de los dos es un parámetro de request: el que llama elige un perfil, no escribe un número.
 
 ---
 
 ## 0. Cambios desde la primera versión
 
-> ## ⚠ En revisión por el V4 del Grupo 5 (8‑sep‑2026)
+> ## ✅ Revisión por el V4 del Grupo 5 — cerrada (10‑sep‑2026)
 >
-> **La mayor parte de esta spec sobrevive intacta**, y conviene decirlo primero: el ejecutor es
-> **transporte, no lenguaje**. Nada de lo que el V4 mueve toca el transporte por socket Unix (§2),
-> el contrato HTTP con el worker (§3), el demultiplexado (§6), el mecanismo del nonce (§7), los
+> **La mayor parte de esta spec sobrevivió intacta**, y conviene decirlo primero: el ejecutor es
+> **transporte, no lenguaje**. Nada de lo que el V4 movió tocó el transporte por socket Unix (§2),
+> el contrato HTTP con el worker (§3) salvo por un header, el mecanismo del nonce (§7), los
 > timeouts (§8), la concurrencia (§9), la limpieza de huérfanos (§10) ni los invariantes de
-> seguridad (§12). Las dos implementaciones —Java 58 tests, Node 65 tests— siguen siendo válidas y
-> **ganan peso relativo**, porque pasan a ser casi lo único que aportamos al veredicto.
+> seguridad (§12).
 >
-> **Lo que sí queda en revisión:**
+> **Lo que quedaba en revisión se resolvió así, y está incorporado abajo como C7–C12:**
 >
-> | Sección | Qué le pasa |
+> | Sección | Cómo cerró |
 > |---|---|
-> | **§4** constantes | Hoy dicen que todo valor numérico es *constante de compilación, nunca un parámetro de request*. Con el catálogo de perfiles, **la imagen y los límites salen del perfil**. El invariante se sostiene igual —nadie de afuera fija los recursos— pero cambia de forma: el perfil es nuestro, versionado e inmutable, y el cliente elige de un catálogo, no escribe un número (**D18**, **D21**) |
-> | **§5** secuencia | El sobre se generaliza: `exitCodeJava`, `clasesTest` y `testsEnReporte` dejan de tener sentido como campos fijos cuando la tapa no sabe qué corrió adentro (**P9**) |
-> | **§7** validación del tar | La spec no fija hoy las reglas de la extracción; las fija de hecho `sandbox/runner/entrypoint.sh`, con una **lista blanca de rutas** (sólo `src/…` y `test/…`, líneas 181‑184). Esa lista no sobrevive a tener `run.sh` en la raíz y configuraciones de G5 en cualquier lado. La spec tiene que **escribir la regla nueva**, que es por **tipo** de entrada y no por prefijo: sin `..`, sin barra inicial, **sin enlaces simbólicos ni duros** (**P2**) |
-> | **§13** aceptación | Se le suman los casos de symlink y hardlink, y el criterio de `11` §10: los cuatro casos que ya existen tienen que dar **exactamente el mismo veredicto** después del refactor |
+> | **§4** constantes | Se resolvió con el **catálogo de perfiles** (C7, C8). La imagen y los límites salen del perfil elegido, pero el perfil es nuestro, versionado e inmutable, y el cliente **elige de un catálogo, no escribe un número**. P1 no se debilitó: cambió de «todo es constante» a «lo variable sale de un conjunto cerrado que sólo nosotros escribimos», y lo prueba `SpecTest#p1_dosPerfilesDifierenSoloEnLosCuatroCamposVariables` (**D18**, **D21**) |
+> | **§5** secuencia | El sobre se generalizó, pero **fuera de este documento**: lo arma la capa 1 de la imagen, no el ejecutor. Para el ejecutor el reporte sigue siendo opaco (R3.5), así que `exitCodeJava`, `clasesTest` y `testsEnReporte` nunca fueron campos de esta spec y no hay nada que cambiar acá (**P9**) |
+> | **§7** validación del tar | **No la escribe esta spec, y ahora se sabe por qué**: el ejecutor no desempaqueta nada (I7). La regla por tipo de entrada —sin `..`, sin barra inicial, sin enlaces simbólicos ni duros— vive en `capa1.sh`, que es quien extrae. Lo que sí entró acá es el **framing de tres documentos** que hizo falta para que la capa 1 exista (C9) (**P2**) |
+> | **§13** aceptación | Actualizada entera en C12. Los casos de symlink y hardlink siguen siendo de la suite de la imagen, no de la del ejecutor |
 >
-> Ver [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §10 y §11, y
-> [`Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) §2.4.
+> Ver [`11-impacto-v4-g5.md`](./11-impacto-v4-g5.md) §10 y §11,
+> [`Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) §2.4 y
+> [`../../HANDOFF-opcion1.md`](../../HANDOFF-opcion1.md).
 
 > **Leer esto primero.** La implementación en Java se construyó contra la versión anterior de este documento y **no** cubre lo de abajo. Las dos implementaciones tienen que quedar alineadas con esta versión.
 
@@ -47,6 +47,22 @@
 > busybox de fixture, y eso escondía cuatro divergencias — el nonce sin implementar, `/work` contra
 > `/tmp`, el tmpfs sin `uid`/`gid`, y el ejemplo del campo `reporte`. Las cuatro están corregidas
 > en esta versión. Detalle en [`README.md`](./README.md) P0.
+
+> **Segunda tanda de cambios — el modelo de dos capas y el catálogo (10‑sep‑2026).** C1–C6 salieron
+> de la primera implementación; C7–C12 salen de la Opción 1 del V4 del Grupo 5, ya implementada y
+> validada contra la imagen real. La implementación de referencia es la de Java: rama
+> `feat/catalogo-perfiles`, 71 tests en verde. **La implementación en Node quedó de lado** y este
+> documento dejó de ser un contrato entre dos implementaciones para ser la spec de una.
+
+| # | Cambio | Dónde | Impacto |
+|---|---|---|---|
+| **C7** | **Catálogo de perfiles.** La imagen y los límites del contenedor dejan de ser constantes de compilación y salen del **perfil** que elige el request. El perfil es nuestro, versionado, inmutable y cargado al arrancar. | §3.1, §3.3, §4.4, A34–A37 (§13.8) | **P1 cambia de forma, no de fondo.** El cliente elige de un conjunto cerrado; sigue sin poder escribir un número |
+| **C8** | **Header `X-Perfil: <id>@<version>`.** Nuevo, obligatorio. `400` si falta o está malformado; **`422` nuevo** si el formato es válido pero la clave no está en el catálogo. | §3.1, §3.3 | Un header más y un código de estado más |
+| **C9** | **Modelo de dos capas y framing de tres documentos.** El stdin pasa de dos documentos (nonce y tar) a **tres** (nonce, largo + guion de la capa 2, y tar), según R7.2. El entrypoint pasa a ser `capa1.sh`. | §4.1, §5, §7 | Es el cambio de fondo del V4: la evaluación (capa 2) la escribe el Grupo 5, el aislamiento (capa 1) lo escribimos nosotros |
+| **C10** | **La respuesta pasó de 10 a 13 campos**: `perfilId`, `perfilVersion` y `perfilHash` al final. El hash del guion se **calcula al cargar**, nunca se declara. | §3.1 | El orden importa: se agregaron al final para que el test que fija el orden se extienda en vez de reescribirse |
+| **C11** | **R11.4 derogada.** Prohibía `docker-java` y el argumento era débil. | §11.4, §14 | El ejecutor está portado a `docker-java` 3.4.1 |
+| **C12** | **§13 y §14 con lo que realmente se implementó y midió**, incluida la parte de §13 que quedó **parcial** a propósito. | §13, §14 | Insumo para R14.1 |
+
 
 **Sobre C1 y el golden test.** A1 compara contra un archivo de referencia versionado. Al agregar el ulimit `cpu` ese archivo queda viejo **a propósito**: es exactamente el mecanismo funcionando. Se regenera una vez, se revisa a ojo el diff, y las dos implementaciones lo comparten. Un cambio en la spec del contenedor que **no** rompa A1 sería la señal de alarma.
 
@@ -76,7 +92,7 @@ Si una implementación agrega un parámetro que modifique la spec —memoria, im
 
 ### No-requerimientos, con motivo
 
-Están acá para que **ninguna de las dos implementaciones los agregue por iniciativa propia**:
+Están acá para que **ninguna implementación los agregue por iniciativa propia**:
 
 - **NO DEBE validar ni desempaquetar el tar de la entrega.** Extraer el tar significaría parsear input hostil adentro del proceso privilegiado, que es lo que el diseño evita. La validación estructural del bundle es responsabilidad del worker, aguas arriba. El ejecutor solo impone un tope de bytes (§4.3).
 - **NO DEBE reintentar una ejecución fallida.** El reintento es decisión del worker, que es quien tiene el contexto de la entrega.
@@ -109,12 +125,14 @@ Están acá para que **ninguna de las dos implementaciones los agregue por inici
 POST /ejecutar HTTP/1.1
 Content-Type: application/octet-stream
 X-Ejecucion-Id: <uuid v4>
+X-Perfil: <perfilId>@<version>
 Content-Length: <n>
 
 <bytes del tar, sin comprimir>
 ```
 
 - `X-Ejecucion-Id` **DEBE** estar presente y ser un UUID válido. Se usa como etiqueta del contenedor y como correlación en los logs. **NO** afecta la spec.
+- `X-Perfil` **DEBE** estar presente y hacer *match* exacto con `^[a-z0-9-]+@[0-9]+$` (C7, C8). Es la clave de búsqueda en el catálogo de §4.4 y lo **único** del request que influye en la spec del contenedor —y sólo eligiendo, nunca escribiendo, los cuatro campos que §4.4 enumera—. Ver R3.6.
 - El cuerpo es el tar de la entrega, opaco para el ejecutor.
 - **DEBE** rechazarse con `413` si `Content-Length` supera `MAX_BUNDLE_BYTES` (§4.3), sin leer el cuerpo.
 - **DEBE** rechazarse con `411` si no viene `Content-Length`. No se acepta `Transfer-Encoding: chunked` en la entrada: necesitamos conocer el tamaño antes de aceptar bytes.
@@ -132,9 +150,14 @@ Content-Length: <n>
   "stderr": "...",
   "reporte": "<testsuite ...>...</testsuite>",
   "reporteAusente": false,
-  "salidaTruncada": false
+  "salidaTruncada": false,
+  "perfilId": "java21-junit",
+  "perfilVersion": 3,
+  "perfilHash": "9f86d081...c9e2f0"
 }
 ```
+
+**R3.7** — Los tres campos del perfil **DEBEN** ir al final y en ese orden. No es cosmético: el orden de los campos de la respuesta está fijado por un test (§13.6, A36), y agregarlos al final es lo que permite que ese test se **extienda** en vez de reescribirse. Un campo nuevo en el medio obliga a reescribir la afirmación entera, y una afirmación reescrita ya no prueba lo mismo que probaba.
 
 | Campo | Tipo | Significado |
 |---|---|---|
@@ -146,12 +169,17 @@ Content-Length: <n>
 | `reporte` | string \| null | Contenido entre los marcadores de §7, **opaco para el ejecutor**. `null` si no apareció. Ver R3.5. |
 | `reporteAusente` | bool | `true` si no se encontró un bloque de reporte válido. |
 | `salidaTruncada` | bool | `true` si el ejecutor recortó algún stream por `MAX_SALIDA_BYTES`. |
+| `perfilId` | string \| null | Perfil con el que se ejecutó (§4.4). `null` sólo en `RECHAZADA` y `ERROR_DAEMON`, donde puede no haberse llegado a resolver. |
+| `perfilVersion` | int \| null | Versión del perfil. Junto con `perfilId` forma la clave que mandó el request. |
+| `perfilHash` | string \| null | SHA-256 del guion de la capa 2, en hexadecimal. **Lo calcula el ejecutor al cargar el catálogo; NO se lee de ningún campo declarado.** Ver R3.6. |
 
 **R3.1** — El ejecutor **NO DEBE** emitir un veredicto académico (aprobado/desaprobado). Devuelve materia prima; el worker decide. Mezclar las dos cosas metería lógica de negocio en el componente privilegiado.
 
 **R3.5** — El ejecutor **NO DEBE** interpretar el contenido de `reporte`. Con la imagen de referencia ese contenido **no es el XML de JUnit**: es un sobre JSON del runner (`schema`, `fase`, `resultado`, `recursos`, y los XML adentro como `tar.gz` en base64), porque JUnit escribe más de un archivo y el worker necesita los tiempos medidos adentro del contenedor. El ejemplo de arriba muestra un `<testsuite>` por brevedad y **eso induce a error**: el campo transporta lo que la imagen ponga entre los marcadores, y quien lo sabe leer es el worker. Cambiar la forma del sobre no toca al ejecutor.
 
 **R3.4** — `oomKilled` **DEBE** venir del `inspect` del paso 5b y **NO DEBE** inferirse del `exitCode`. El motivo está medido: con la JVM bien configurada el que se queda sin memoria es la JVM y no el cgroup, así que el out-of-memory llega como **`exitCode: 3` con `OOMKilled: false`**, y no como el `137` que uno esperaría. Los dos caminos existen y el worker necesita los dos datos para mapearlos. Un `exitCode` sin `oomKilled` deja al worker sin poder distinguir «se quedó sin memoria» de «el código del alumno falló», y eso cambia el veredicto que ve el alumno.
+
+**R3.6** — `perfilHash` **DEBE** calcularse sobre los bytes del guion en el momento de cargar el catálogo, y **NO DEBE** leerse de un campo del JSON del perfil. Un hash declarado en el archivo es un hash que puede mentir: describe lo que quien escribió el archivo dice que puso, no lo que efectivamente se ejecutó. Este campo existe para que el worker pueda, meses después, reconstruir **con qué código exacto** se evaluó una entrega; si el dato es autodeclarado no sirve para eso, que es lo único para lo que sirve.
 
 ### 3.2 Enum `resultado`
 
@@ -169,11 +197,16 @@ Content-Length: <n>
 | Código | Caso |
 |---|---|
 | `200` | Ejecución terminada — incluyendo `TIMEOUT`, que es un resultado, no un error |
-| `400` | Falta `X-Ejecucion-Id` o no es un UUID |
+| `400` | Falta `X-Ejecucion-Id` o no es un UUID, **o** falta `X-Perfil` o no respeta `^[a-z0-9-]+@[0-9]+$` |
+| `422` | `X-Perfil` bien formado pero **la clave no está en el catálogo** (§4.4) |
 | `411` | Falta `Content-Length` |
 | `413` | Bundle mayor a `MAX_BUNDLE_BYTES` |
 | `503` | Cola llena (`resultado: "RECHAZADA"`), con header `Retry-After` |
 | `502` | `ERROR_DAEMON` |
+
+**R3.8** — La diferencia entre `400` y `422` **DEBE** respetarse: `400` es «el pedido está mal escrito», `422` es «el pedido está bien escrito y pide algo que no existe». Al worker le importa porque son fallas distintas: un `400` es un bug del worker y hay que arreglarlo en el código; un `422` es un desajuste de despliegue —el worker conoce un perfil que este ejecutor todavía no tiene cargado— y se arregla desplegando, no recompilando. Colapsar los dos en `400` esconde exactamente el caso que más va a pasar al agregar un perfil nuevo.
+
+**R3.9** — El orden de validación **DEBE** ser: `X-Ejecucion-Id`, después `X-Perfil`, después `Content-Length`. El `413` de `MAX_BUNDLE_BYTES` se responde **sin leer un solo byte del cuerpo**, y por eso todo lo que se valida sobre headers tiene que estar antes.
 
 **R3.2** — Los mensajes de error **NO DEBEN** incluir rutas del host, versiones del daemon ni el cuerpo de la respuesta de Docker. Un mensaje corto y un id de correlación.
 
@@ -187,16 +220,28 @@ Devuelve `200` con `{"daemon": "ok", "enVuelo": 3, "enCola": 0}`. **DEBE** consu
 
 ## 4. La spec del contenedor
 
-Es el corazón del componente. Todo esto es **constante en el código fuente**.
+Es el corazón del componente. Todo esto es **constante en el código fuente**, salvo los cuatro
+campos que salen del perfil (§4.4) y que están marcados uno por uno abajo.
+
+> **Qué le pasó a P1 con el catálogo de perfiles (C7).** Antes P1 se leía «ningún byte de la spec
+> proviene de quien llama». Ahora hay cuatro campos que dependen del header `X-Perfil`, y conviene
+> ser exacto en vez de tranquilizador: **el que llama no escribe ninguno de esos cuatro valores,
+> los elige de un conjunto cerrado que escribimos nosotros**. La diferencia es la que hay entre un
+> menú y un formulario. Un request no puede pedir 8 GiB de memoria; puede pedir el perfil
+> `java21-junit@4`, y qué significa eso lo decidió un archivo versionado en nuestro repo, revisado
+> como se revisa código. §4.4 explica por qué eso conserva la propiedad que importa, y
+> `SpecTest#p1_dosPerfilesDifierenSoloEnLosCuatroCamposVariables` es el test que lo prueba: dos
+> perfiles cualesquiera producen un `create` idéntico salvo esos cuatro campos.
 
 ### 4.1 JSON de `POST /containers/create`
 
-Lo único que varía entre ejecuciones son las dos marcas señaladas.
+Lo que varía entre ejecuciones son el nombre, el label y los **cuatro campos del perfil**, marcados
+con `←` abajo. Nada más.
 
 ```json
 {
-  "Image": "sandbox-runner:<TAG_FIJO>",
-  "Entrypoint": ["/opt/sandbox/entrypoint.sh"],
+  "Image": "<perfil.imagen>",                        ← del perfil (§4.4)
+  "Entrypoint": ["/opt/sandbox/capa1.sh"],
   "Cmd": [],
   "User": "1000:1000",
   "WorkingDir": "/work",
@@ -216,8 +261,8 @@ Lo único que varía entre ejecuciones son las dos marcas señaladas.
     "NetworkMode": "none",
     "ReadonlyRootfs": true,
     "Tmpfs": { "/work": "rw,noexec,nosuid,nodev,size=64m,mode=0700,uid=1000,gid=1000" },
-    "Memory": 536870912,
-    "MemorySwap": 536870912,
+    "Memory": "<perfil.limites.memoriaMb * 1048576>",  ← del perfil (§4.4)
+    "MemorySwap": "<idéntico a Memory>",               ← del perfil (§4.4)
     "MemorySwappiness": 0,
     "NanoCpus": 1000000000,
     "PidsLimit": 128,
@@ -235,7 +280,7 @@ Lo único que varía entre ejecuciones son las dos marcas señaladas.
       "Config": { "max-size": "8m", "max-file": "1" }
     },
     "Ulimits": [
-      { "Name": "cpu",    "Soft": 20,       "Hard": 20 },
+      { "Name": "cpu",    "Soft": "<perfil.limites.cpuS>", "Hard": "<idem>" },   ← del perfil (§4.4)
       { "Name": "nofile", "Soft": 256,      "Hard": 256 },
       { "Name": "nproc",  "Soft": 128,      "Hard": 128 },
       { "Name": "fsize",  "Soft": 33554432, "Hard": 33554432 }
@@ -245,6 +290,13 @@ Lo único que varía entre ejecuciones son las dos marcas señaladas.
 ```
 
 Y el nombre del contenedor, en la query: `?name=sandbox-<X-Ejecucion-Id>`.
+
+> **Lo de arriba es la spec, no el byte a byte del cable (C11).** El cuerpo que se manda de verdad
+> lo serializa `docker-java`, y difiere en dos cosas que **no cambian nada para el daemon**: incluye
+> los campos nulos de su modelo, y manda `RestartPolicy` como `{"Name":""}` en vez de `{"Name":"no"}`
+> —`""` es la ausencia de política, que es lo que pone `docker run` sin `--restart`—. El archivo de
+> referencia de A1 tiene esos bytes, no éstos. La diferencia está anotada acá a propósito: si el
+> golden y el documento se contradicen sin explicación, el que se termina ignorando es el golden.
 
 ### 4.2 Por qué cada campo, para la defensa
 
@@ -263,6 +315,10 @@ Y el nombre del contenedor, en la query: `?name=sandbox-<X-Ejecucion-Id>`.
 | `AttachStdout/Stderr: false` | No nos adjuntamos a la salida: la drena el log driver. Elimina el riesgo de deadlock por buffer lleno. |
 | `Ulimits[cpu]` | **Tiempo de CPU, no de pared.** El límite que le corta el paso al alumno se mide en CPU consumida porque *no cuenta el tiempo en que el host le dio el procesador a otra ejecución del pool*: es lo que elimina los `TIMEOUT` intermitentes por varianza del pool, en vez de acolcharlos con margen. Al agotarse, el kernel manda `SIGXCPU`. Es lo mismo que hace `isolate`, y por lo tanto Judge0 y Piston. |
 | `Binds`/`Mounts`/`Devices` vacíos explícitos | Se escriben aunque sean vacíos, para que el golden test de §13.1 los cubra. |
+| `Entrypoint` = `capa1.sh` | **La capa 1** (C9). Es nuestro código y es el `PID 1` del contenedor: extrae el tar, corre la capa 2 del perfil, recoge el buzón y arma el sobre. La evaluación —qué es compilar, qué es un test, qué significa aprobar— vive en la capa 2, que la escribe el Grupo 5 y llega por stdin. La detección de procesos sobrevivientes vive acá, en la capa que la capa 2 **no controla**: no se puede prevenir, se puede detectar, y la detección tiene que vivir donde el evaluado no llega. |
+| `Image` del perfil | Un perfil es un lenguaje y su toolchain. Pedir que todos los lenguajes entren en una imagen única fue siempre lo que hacía inviable el catálogo. |
+| `Memory` / `MemorySwap` del perfil | Compilar Java no cuesta lo mismo que correr un script. Un techo único obliga a dimensionar por el peor caso y desperdiciarlo en todos los demás. Sigue sin haber swap: los dos valores son **siempre iguales entre sí**. |
+| `Ulimits[cpu]` del perfil | Mismo argumento, en tiempo de CPU. El techo duro `CPU_MAX_S` y la relación de R4.1 los hace cumplir el catálogo al **arrancar**, no cada ejecución. |
 | `uid`/`gid` en las opciones del tmpfs | **Sin esto el contenedor no arranca.** Docker crea el tmpfs como `root`; con `mode=0700` y sin `uid`/`gid`, el proceso —que corre como `1000:1000`— no puede escribir en su único directorio escribible, y el entrypoint muere con `Permission denied` antes de leer el bundle. Encontrado corriendo el ejecutor contra la imagen real: las suites de aceptación no lo ven porque su imagen de fixture corre como root. |
 
 ### 4.3 Constantes
@@ -271,18 +327,85 @@ Y el nombre del contenedor, en la query: `?name=sandbox-<X-Ejecucion-Id>`.
 |---|---|---|
 | `MAX_BUNDLE_BYTES` | `2097152` (2 MiB) | Tope del cuerpo del request |
 | `TIMEOUT_EJECUCION_MS` | `60000` | Reloj de pared del ejecutor, desde `start`. Es la **red de última instancia**, no el mecanismo |
-| `TIMEOUT_CPU_SEGUNDOS` | `20` | Ulimit `cpu` del contenedor: techo de CPU de **todas** las fases juntas. Los relojes por fase viven en el entrypoint de la imagen (`ulimit -t`), no acá |
-
-**R4.1** — `TIMEOUT_CPU_SEGUNDOS` **DEBE** ser holgadamente menor que `TIMEOUT_EJECUCION_MS` expresado en segundos. Con `NanoCpus` = 1 CPU, el tiempo de CPU nunca supera al de pared, así que si los dos números se acercan el reloj de pared dispara primero **siempre** y el límite de CPU queda decorativo — que es justo el problema que C1 viene a arreglar. La relación 20 s de CPU contra 60 s de pared deja al contenedor margen para consumir su presupuesto completo aun con el host bajo contención. Al revés, el reloj de pared tiene que ser generoso precisamente porque **el presupuesto de CPU no tiene cota superior en tiempo de pared**: un proceso puede consumir 20 s de CPU en 55 s de reloj si la máquina está saturada.
 | `TIMEOUT_DAEMON_MS` | `5000` | Por llamada a la API de Docker (salvo `wait`) |
-| `MAX_SALIDA_BYTES` | `1048576` (1 MiB) | Por cada stream, tras demultiplexar |
-| `MAX_FRAME_BYTES` | `1048576` (1 MiB) | Tope de un frame individual (§6) |
+| `MAX_SALIDA_BYTES` | `1048576` (1 MiB) | Por cada stream, tras demultiplexar (§6, R6.7) |
 | `MAX_CUERPO_DAEMON_BYTES` | `16777216` (16 MiB) | Tope de una respuesta del daemon leída entera en memoria. Con `max-size: 8m` el log no debería acercarse; existe para que un daemon anómalo no nos haga crecer sin límite |
 | `MAX_CONCURRENTES` | `8` | Contenedores simultáneos |
 | `MAX_COLA` | `16` | Esperando turno; por encima, `503` |
 | `INTERVALO_BARRIDO_MS` | `300000` (5 min) | Limpieza de huérfanos |
 | `EDAD_HUERFANO_MS` | `600000` (10 min) | Antigüedad para considerar huérfano |
 | `VERSION_API_DOCKER` | `v1.43` | Fijada en el path |
+| `MEMORIA_MAX_MB` | `1024` | **Techo duro de cualquier perfil** (C7). Ningún perfil del catálogo puede declarar más |
+| `CPU_MAX_S` | `30` | **Techo duro de cualquier perfil** (C7). Ídem, para el ulimit `cpu` |
+| `MAX_SCRIPT_BYTES` | `262144` (256 KiB) | Tope del guion de la capa 2 dentro de un perfil (§7, C9) |
+
+> **`TIMEOUT_CPU_SEGUNDOS` se eliminó (C7).** Era el ulimit `cpu` como constante única. Ahora ese
+> valor sale de `limites.cpuS` del perfil, y lo que quedó como constante es el **techo**
+> (`CPU_MAX_S`) que ningún perfil puede pasar. No es que el límite se aflojó: pasó de ser un
+> número a ser un intervalo con tope, y quien elige adentro del intervalo somos nosotros al
+> escribir el perfil, no el que llama.
+
+**R4.1** — El `cpuS` de **cada perfil del catálogo** **DEBE** ser holgadamente menor que
+`TIMEOUT_EJECUCION_MS` expresado en segundos. Con `NanoCpus` = 1 CPU, el tiempo de CPU nunca supera
+al de pared, así que si los dos números se acercan el reloj de pared dispara primero **siempre** y
+el límite de CPU queda decorativo — que es justo el problema que C1 vino a arreglar. La relación se
+verifica al **cargar el catálogo**, perfil por perfil, y su violación hace fallar el **arranque del
+proceso**, nunca una ejecución individual (§4.4). Al revés, el reloj de pared tiene que ser generoso
+precisamente porque **el presupuesto de CPU no tiene cota superior en tiempo de pared**: un proceso
+puede consumir 20 s de CPU en 55 s de reloj si la máquina está saturada.
+
+**R4.2** — Los relojes **por fase** (compilar, correr los tests) **NO DEBEN** vivir acá. Viven en la
+capa 2 del perfil, que es la única que sabe qué es una fase. El ulimit `cpu` de §4.1 es el techo de
+todas juntas, y el ejecutor no sabe ni tiene que saber cómo se reparte adentro.
+
+### 4.4 El catálogo de perfiles
+
+Es el mecanismo con el que C7 mantiene P1 mientras admite más de un lenguaje.
+
+**R4.3** — El catálogo **DEBE** ser un directorio de sólo lectura, un archivo JSON por perfil,
+nombrado `<perfilId>@<version>.json`. Esa misma cadena `<perfilId>@<version>` es la clave de
+búsqueda y el valor exacto del header `X-Perfil`.
+
+```json
+{
+  "perfilId": "java21-junit",
+  "version": 3,
+  "imagen": "sandbox-runner:2.0.0-capa1",
+  "script": "#!/bin/sh\n... el guion completo de la capa 2, escapado en una sola cadena JSON ...",
+  "reportFormat": "junit-xml",
+  "limites": { "memoriaMb": 512, "cpuS": 20 }
+}
+```
+
+**R4.4** — El catálogo **DEBE** cargarse entero al arrancar el proceso y **NO DEBE** releerse ni
+recargarse en caliente. Un catálogo que cambia mientras el proceso corre convierte «con qué se
+evaluó esta entrega» en una pregunta sin respuesta estable, y `perfilHash` (R3.6) existe justamente
+para que esa pregunta tenga respuesta.
+
+**R4.5** — Las validaciones del catálogo **DEBEN** hacer fallar el **arranque del proceso**, nunca
+una ejecución individual. Es el mismo criterio que ya tenía el ejecutor con su guion único, ahora
+generalizado a un directorio. Un perfil inválido es un error de despliegue, y un error de despliegue
+tiene que ser ruidoso e inmediato, no un `500` intermitente que aparece recién cuando alguien pide
+ese perfil. Fallan el arranque:
+
+| Causa | Motivo |
+|---|---|
+| JSON inválido | Trivial |
+| `limites.memoriaMb` > `MEMORIA_MAX_MB` | El techo de §4.3 |
+| `limites.cpuS` > `CPU_MAX_S` | Ídem |
+| `limites.cpuS` demasiado cerca del reloj de pared | R4.1, perfil por perfil |
+| `script` mayor a `MAX_SCRIPT_BYTES` | El guion de la capa 2 viaja por stdin (§7) |
+
+**R4.6** — De un perfil salen **exactamente cuatro** campos del `create`: `Image`, `Memory`,
+`MemorySwap` y `Ulimits[cpu]`. Todo el resto de §4.1 es idéntico sea cual sea el perfil. Esto es
+verificable y está verificado: el test compara el `create` de dos perfiles distintos y exige que
+difieran **sólo** en esos cuatro campos. Es lo que sostiene P1 e I2 ahora que la spec dejó de ser
+literalmente constante, y es más fuerte que el golden fijo que reemplaza, porque el golden probaba
+que un JSON no cambiaba y esto prueba que **el conjunto de lo que puede cambiar es cerrado**.
+
+**R4.7** — El campo `reportFormat` es **opaco para el ejecutor**: viaja al worker y no se
+interpreta acá. Saber leer un reporte es conocimiento de evaluación, y el ejecutor no lo tiene
+(R3.1, R3.5).
 
 ---
 
@@ -290,12 +413,44 @@ Y el nombre del contenedor, en la query: `?name=sandbox-<X-Ejecucion-Id>`.
 
 Todas las rutas van prefijadas con `/{VERSION_API_DOCKER}`. **R5.0** — La versión **DEBE** ir explícita en el path; **NO DEBE** usarse el default del daemon.
 
+**R5.12** — Al arrancar, antes de aceptar conexiones o programar el barrido, el ejecutor **DEBE**
+confirmar contra el daemon que `MinAPIVersion <= VERSION_API_DOCKER <= ApiVersion` (`GET /version`).
+El mínimo que acepta cada build del Engine varía — un `create` con `v1.43` fue rechazado contra
+29.2.1 y anduvo contra 29.7.2 (`MinAPIVersion 1.40`) — así que fijar la versión (R5.0) no alcanza
+para saber si el daemon la soporta. Si el daemon no responde, o responde rechazando la propia
+llamada versionada (un Engine cuyo rango no la incluye puede devolver `400` a `/v1.43/version`,
+«too old» o «too new» según de qué lado quede),
+o su rango no incluye `VERSION_API_DOCKER`, el arranque **DEBE** fallar de inmediato, sin
+reintentos: el mismo criterio de R4.5 para el catálogo — un error de despliegue tiene que ser
+ruidoso e inmediato, nunca aparecer recién en la primera ejecución de un alumno.
+
+**R5.13** — El único transporte permitido en producción es `unix://` o `npipe://`; el arranque
+**DEBE** fallar de inmediato (antes de conectar a Docker) si `DOCKER_HOST` es cualquier otra cosa,
+incluido `tcp://`, `http://`, `https://`, vacío o malformado. El paso 4 de esta misma sección
+(«escribir y cerrar el socket adjunto entero») es lo que le da EOF a stdin del contenedor, y
+docker-java no ofrece una media-clausura ordenada: ese cierre es **abortivo** (termina en
+`request.abort()` del transporte httpclient5). Sobre TCP, un cierre abortivo llega al otro lado
+como un *reset* (RST), y un RST hace que el kernel receptor descarte los bytes que ya llegaron
+pero que la aplicación todavía no leyó — la entrega no es atómica con la escritura, y `Entrada`
+sólo puede reportar los bytes que la librería leyó y flusheó de este lado, no los que el otro
+lado efectivamente conservó.
+
+Se midió con un daemon de mentira por TCP en loopback (200 KB de tar, 24 hilos quemando CPU,
+150 ejecuciones): Windows truncó 115/150 y Linux 44/150; incluso un stdin chico de 56 bytes se
+perdió entero 2/300 veces en reposo y 31/300 bajo carga. Contra Docker real por *unix socket*
+(Linux) llegaron 60/60 completos, y por *named pipe* (Windows) 39/40 (más un `ERROR_DAEMON` sin
+explicar, no truncamiento). De ahí el corte: `unix://` y `npipe://` son los transportes donde la
+medición no mostró pérdida, y son además los dos que Windows y Linux exponen de forma nativa
+(§5, nota de por qué docker-java y no el cliente a mano). Esto no arregla la causa de fondo —
+seguiría haciendo falta una media-clausura ordenada, que docker-java no expone—, sólo la saca de
+producción restringiendo el transporte a donde la medición no la mostró.
+
 | # | Llamada | Notas |
 |---|---|---|
 | 1 | `POST /containers/create?name=sandbox-<id>` | Cuerpo de §4.1. `Content-Type: application/json` |
 | 2 | `POST /containers/<id>/attach?stream=1&stdin=1` | **Antes de `start`.** Devuelve `101` |
 | 3 | `POST /containers/<id>/start` | |
-| 4 | Escribir en el socket adjunto y **cerrarlo entero** | Primero el nonce, después el tar (§7) |
+| 4 | Escribir en el socket adjunto y **cerrarlo entero** | Los **tres documentos** de §7: nonce, largo + guion de la capa 2, y el tar |
 | 5 | `POST /containers/<id>/wait?condition=not-running` | Con `TIMEOUT_EJECUCION_MS`; si vence → `POST /containers/<id>/kill` y después igual `wait` |
 | 5b | `GET /containers/<id>/json` | Solo para leer `State.OOMKilled` (R5.10) |
 | 6 | `GET /containers/<id>/logs?stdout=1&stderr=1` | Respuesta HTTP normal. Se lee entera y se demultiplexa en memoria |
@@ -310,6 +465,13 @@ Todas las rutas van prefijadas con `/{VERSION_API_DOCKER}`. **R5.0** — La vers
 **R5.4** — El paso 6 **DEBE** ocurrir antes del paso 7. Borrado el contenedor, los logs no existen más.
 
 **R5.10** — El paso 5b **DEBE** ejecutarse después del `wait` y antes del `DELETE`, con `TIMEOUT_DAEMON_MS`. De la respuesta se lee **únicamente** `State.OOMKilled`; el resto del `inspect` se ignora. Si la llamada falla, **NO DEBE** abortarse la ejecución: se devuelve `oomKilled: false` y se registra el fallo, porque el resultado ya está y perderlo por un dato de diagnóstico sería peor. En `TIMEOUT` el paso 5b se ejecuta igual: un contenedor que fue matado por el límite de memoria y además llegó al reloj es un caso real.
+
+**R5.11** — El EOF de stdin **DEBE** producirse cerrando la conexión adjunta, no con una media
+clausura del socket. El contenedor se crea con `StdinOnce: true` (§4.1), así que cerrar la conexión
+**es** el EOF. Es una consecuencia de la spec, y por eso se puede depender de ella: sin EOF la capa
+1 se cuelga leyendo el tar hasta el reloj de pared, y la media clausura no está disponible en todos
+los clientes. El cierre **DEBE** ocurrir en un bloque de limpieza garantizada apenas la entrega
+termina o vence su tope (R8.5).
 
 ### 5.1 Requisitos del cliente HTTP contra el socket
 
@@ -336,13 +498,42 @@ Todas las rutas van prefijadas con `/{VERSION_API_DOCKER}`. **R5.0** — La vers
 
 **R6.1** — Antes de demultiplexar, **DEBE** verificarse que el `Content-Type` de la respuesta sea `application/vnd.docker.multiplexed-stream`. Si es `application/vnd.docker.raw-stream`, el contenedor tiene TTY y la salida **no** viene enmarcada: eso es `ERROR_DAEMON`, no un caso a manejar. Es un assert de dos líneas que convierte una corrupción silenciosa en un error inmediato.
 
-**R6.2** — Si el largo declarado supera `MAX_FRAME_BYTES`, **DEBE** abortarse la lectura con `ERROR_DAEMON`. **NO DEBE** reservarse el buffer antes de validar el largo: el campo es un `uint32` y admite valores de hasta 4 GiB.
+**R6.2** — El campo de largo es un `uint32` y admite valores de hasta 4 GiB, y ningún largo
+declarado **DEBE** hacer que se reserve memoria proporcional a él. Esto **está garantizado por
+construcción**, no por una validación propia: el consumidor de frames de `docker-java`
+(`FramedInputStreamConsumer`) lee el payload en trozos de un buffer fijo de 1024 bytes, sea cual sea
+el largo que el encabezado declare, así que nunca hay un `new byte[largoDeclarado]`. Lo que ya **no**
+es una garantía nuestra es que un largo fuera de rango **aborte con `ERROR_DAEMON`**: confirmado
+contra `DesenmarcadoTest#a9_...` y `#r65_elMismoLargoDeCuatroGibSinNadaDespuesTerminaEnSilencio`, un
+largo declarado de 4 GiB (que la librería acumula en un `int` y le queda negativo) puede terminar de
+dos formas distintas según qué haya bufferizado el transporte en ese instante exacto: si todavía
+quedan bytes del stream ya leídos del socket, la lectura con un largo negativo revienta como
+`ArrayIndexOutOfBoundsException` y sale como `ERROR_DAEMON`; si el frame corrupto es lo último del
+stream, la lectura da directamente fin de stream y termina en silencio, igual que cualquier otro
+truncamiento (R6.5). Las dos ramas cumplen la mitad que sí podemos prometer —nunca se reserva
+memoria por el largo declarado, y el desenlace es inmediato— pero cuál de las dos ocurre es un
+accidente de alineación con el transporte, no un tope propio. El tope real y determinístico de
+memoria por stream es `MAX_SALIDA_BYTES` (R6.7), que es nuestro y no depende de esto.
 
 **R6.3** — Un frame con largo `0` es válido: payload vacío, seguir leyendo. **NO DEBE** trabar el bucle ni tratarse como fin de stream.
 
 **R6.4** — Un tipo distinto de `1` o `2` **DEBE** ser error fatal. **NO DEBE** asumirse `stdout` por defecto: adivinar es como se corrompe un resultado en silencio.
 
-**R6.5** — Los frames pueden llegar partidos, y un mismo frame puede venir en varios trozos de red. La lectura **DEBE** acumular en un buffer hasta tener el encabezado completo, y después hasta tener el payload completo.
+**R6.5** — Los frames pueden llegar partidos, y un mismo frame puede venir en varios trozos de red;
+un encabezado o un payload puede quedar **truncado** si la conexión termina a mitad de un frame
+—incluso con un cuerpo HTTP perfectamente válido y cerrado (`Transfer-Encoding: chunked` con su
+`0\r\n\r\n`), si el contenido de Docker adentro de ese cuerpo simplemente se corta antes—.
+**Confirmado** (`DesenmarcadoTest#r65_...`): `docker-java` no lo trata como un error. Cuando la
+lectura de un encabezado o un payload se topa con el fin del stream, el consumidor de frames
+devuelve lo que ya había entregado y termina, sin pasar por `ERROR_DAEMON`. Esto **no** activa
+`salidaTruncada`: ese campo es del tope propio de R6.7 y sólo se enciende cuando **nosotros**
+cortamos por exceso de bytes, nunca cuando es el stream el que se acorta solo. La consecuencia
+práctica, y hay que decirla porque no es simétrica con R7.7: si el corte se llevó puesto el bloque
+del reporte, la respuesta sale con `reporteAusente: true` y `salidaTruncada: false` —exactamente la
+misma combinación que una entrega que nunca produjo reporte—, así que este truncamiento en
+particular **no** es distinguible por el worker de "no hubo reporte". R7.7 sólo describe la
+combinación (`reporteAusente: true` **y** `salidaTruncada: true`) para el truncamiento de R6.7; este
+es un truncamiento distinto, más arriba en la cadena, y punto ciego.
 
 **R6.6** — Una línea de texto puede cruzar dos frames, y un frame puede traer varias líneas. **NO DEBE** parsearse por líneas adentro de un frame: se concatena todo el stream primero y recién ahí se separa.
 
@@ -356,11 +547,34 @@ El código del alumno escribe en el mismo `stdout` por donde viaja el reporte de
 
 **R7.1** — El ejecutor **DEBE** generar, por ejecución, un nonce aleatorio criptográficamente seguro de 16 bytes, en hexadecimal minúscula (32 caracteres).
 
-**R7.2** — El nonce **DEBE** viajar como **primera línea de stdin**, terminada en `\n`, seguida inmediatamente por los bytes del tar. Es decir, el paso 4 de §5 escribe: `<nonce>\n` + `<tar>` y después cierra.
+**R7.2** — El stdin del contenedor **DEBE** ser exactamente estos **tres documentos pegados, sin
+separadores** (C9), y después el cierre:
+
+```
+<nonce>\n                 32 caracteres hex, minúscula
+<n>\n                     cuántos BYTES mide el guion de la capa 2, en decimal ASCII
+<guion de n bytes>        la capa 2 del perfil (§4.4), opaca para el ejecutor
+<tar>                     el bundle: "todo lo que quede del stream"
+```
+
+**R7.9** — El largo del guion **DEBE** ir adelante, y **NO DEBE** usarse ninguna marca de fin. El
+motivo es que el guion lo escribe el Grupo 5: es texto arbitrario y puede contener cualquier línea,
+incluida la que eligiéramos como separador. Un separador de texto es una apuesta a que el contenido
+no lo contiene, y acá el contenido es de otro equipo. Con el largo adelante no hay alfabeto que
+adivinar: son `n` bytes opacos. Es `Content-Length`, y por el mismo motivo por el que HTTP lo usa.
+
+**R7.10** — Usar el **nonce como delimitador** del guion está **PROHIBIDO**. Se lo mostraría a la
+capa 2, que es exactamente lo que el nonce existe para evitar (R7.3, I5). Una capa 2 que conoce el
+nonce puede falsificar el bloque de reporte, y la capa 2 es código de otro equipo corriendo en el
+mismo contenedor que el alumno.
+
+**R7.11** — El largo se cuenta en **BYTES, no en caracteres**. Un acento en un comentario del guion
+mueve el número. Es un bug que no aparece con un guion ASCII y revienta con el primer comentario
+escrito en castellano.
 
 **R7.3** — El nonce **NO DEBE** pasarse por variable de entorno, por argumento, ni por archivo. Una variable de entorno es recuperable desde el proceso del alumno leyendo `/proc/1/environ`, aunque el entrypoint la borre: el `unset` cambia la memoria del shell, no el snapshot del kernel.
 
-**R7.4** — El entrypoint de la imagen lee esa primera línea en una variable de shell **no exportada**, y emite el reporte entre marcadores:
+**R7.4** — La capa 1 de la imagen (`capa1.sh`, §4.2) lee el nonce en una variable de shell **no exportada**, lo consume antes de invocar a la capa 2 —que por lo tanto nunca lo ve— y emite el reporte entre marcadores:
 
 ```
 ---SANDBOX-<nonce>-INICIO---
@@ -410,7 +624,7 @@ El código del alumno escribe en el mismo `stdout` por donde viaja el reporte de
 
 **R10.1** — Al arrancar, y cada `INTERVALO_BARRIDO_MS`, **DEBE** listar `GET /containers/json?all=1&filters={"label":["sandbox=1"]}` y borrar los que superen `EDAD_HUERFANO_MS`.
 
-**R10.2** — El barrido **NO DEBE** borrar contenedores en vuelo de esta misma instancia. El filtro por edad alcanza si `EDAD_HUERFANO_MS` es holgadamente mayor que `TIMEOUT_EJECUCION_MS` — con los valores de §4.3, 20 veces mayor.
+**R10.2** — El barrido **NO DEBE** borrar contenedores en vuelo de esta misma instancia. El filtro por edad alcanza si `EDAD_HUERFANO_MS` es holgadamente mayor que `TIMEOUT_EJECUCION_MS` — con los valores de §4.3, **10 veces mayor** (600 s contra 60 s). Antes de C1 la relación era de 20 veces, con el reloj de pared en 30 s; al subirlo a 60 s el margen se redujo a la mitad y **sigue alcanzando**, pero conviene tener el número escrito: si el reloj de pared vuelve a subir, éste es el otro número que hay que mirar.
 
 **R10.3** — Un fallo del barrido se registra y no afecta las ejecuciones en curso.
 
@@ -426,9 +640,51 @@ El código del alumno escribe en el mismo `stdout` por donde viaja el reporte de
 
 **R11.3 — Dependencias.** Solo se admiten dependencias que **no** parseen bytes controlados por un atacante. Una librería de JSON es aceptable: el JSON de la spec lo serializamos nosotros y el que parseamos viene del daemon, que ya es parte de la base de confianza.
 
-**R11.4 — Prohibición explícita de clientes de Docker.** **NO DEBE** usarse `docker-java`, `dockerode` ni equivalentes. El motivo no es el tamaño: esas librerías ponen, en el mismo proceso que tiene el socket, un objeto con un setter equivalente a `withPrivileged(true)`. Reintroducen exactamente la superficie que este componente existe para eliminar.
+**R11.4 — ~~Prohibición explícita de clientes de Docker.~~ DEROGADA (C11).**
 
-**R11.5 — Tamaño del código propio.** Objetivo: **por debajo de 400 líneas** sin contar tests. No es una métrica cosmética: la corrección de un control de seguridad se establece leyéndolo, no probándolo, y eso solo es viable si es chico (Saltzer & Schroeder, 1975, *economía de mecanismo*).
+> **Qué decía y por qué se cayó.** Decía que **NO DEBE** usarse `docker-java`, `dockerode` ni
+> equivalentes, porque esas librerías ponen, en el mismo proceso que tiene el socket, un objeto con
+> un setter equivalente a `withPrivileged(true)`, y eso reintroduciría la superficie que este
+> componente existe para eliminar.
+>
+> **El argumento es débil, y conviene decir exactamente por qué.** Quien ya puede ejecutar código
+> en este proceso tiene el socket de Docker y puede mandarle a mano el JSON que quiera: la librería
+> no agrega **capacidad**, agrega **comodidad**. Un `withPrivileged(true)` disponible en el
+> classpath no es una superficie nueva, es la misma superficie con un nombre más corto. Prohibir la
+> librería sólo obligaba a reescribirla peor.
+>
+> **Lo que sí costaba era el golden test A1/A2**, y ése era el motivo real para desconfiar: si el
+> cuerpo del `create` lo arma la librería, deja de haber un JSON nuestro que comparar. **Se
+> recuperó entero.** `CreateContainerCmdImpl` *es* el modelo del cuerpo del pedido, y se serializa
+> con el mismo `ObjectMapper` con el que la librería lo manda; A1 compara esos bytes contra el
+> archivo de referencia y `EjecucionTest#elCuerpoDeCreateEsElGolden` compara **los bytes que el
+> daemon recibió de verdad por el socket**. La spec del archivo es la spec del cable.
+>
+> **Lo que sí quedó como costo real** es el tamaño del artefacto: el fat jar pasó de ~2 MB a
+> **21 MB**, porque `docker-java-core` arrastra guava, commons-compress, commons-lang3, commons-io
+> y bouncycastle, que este ejecutor no usa. Se puede podar con exclusiones, verificándolas una por
+> una contra el arranque real del cliente. **Está pendiente** y es una deuda anotada, no un
+> problema resuelto: R11.3 sigue vigente y cada una de esas dependencias es superficie que no
+> auditamos.
+
+**R11.5 — ~~Tamaño del código propio.~~ DEROGADA (11-sep-2026).**
+
+> **Qué decía y por qué se cayó.** Decía: objetivo **por debajo de 400 líneas** sin contar tests,
+> porque la corrección de un control de seguridad se establece leyéndolo, no probándolo, y eso solo
+> es viable si es chico (Saltzer & Schroeder, 1975, *economía de mecanismo*). La implementación de
+> referencia midió **1064 líneas efectivas** (§14): 2,6× el objetivo. El argumento de Saltzer &
+> Schroeder no se cae por eso —sigue siendo cierto que un control de seguridad se audita leyéndolo—,
+> pero el número que debía disciplinar ese argumento sí: un objetivo incumplido por 2,6× y dejado
+> escrito igual deja de ser un requisito y pasa a ser una decoración, tal como este mismo documento
+> ya lo decía en R14.2 antes de esta derogación.
+>
+> **El argumento nuevo.** El objetivo de auditabilidad que R11.5 perseguía no desaparece: sigue vivo
+> en **R14.1**, la revisión línea por línea por dos personas que no escribieron el código. La
+> diferencia es que R14.1 es una garantía verificable con evidencia (¿se hizo la revisión, están las
+> observaciones versionadas?) y R11.5 era un número que ya se sabía incumplido y que no iba a bajar
+> por seguir escrito. Entre bajar el alcance del componente (reescribir para volver a 400 líneas) y
+> cambiar el objetivo dejando el argumento por escrito, se elige lo segundo: el tamaño no es lo que
+> queda sosteniendo la auditabilidad de acá en más, R14.1 sí.
 
 **R11.6 — Logs del ejecutor.** Por ejecución: id, duración de cada paso, bytes escritos, bytes leídos por stream, resultado. **NO DEBEN** registrarse el contenido del bundle, la salida del alumno ni el nonce.
 
@@ -443,7 +699,9 @@ Cada una tiene un test en §13. Son las afirmaciones que se sostienen en la defe
 | # | Invariante |
 |---|---|
 | **I1** | El JSON de `create` es byte a byte idéntico entre ejecuciones, salvo el label `sandbox.ejecucion` y el `name`. |
-| **I2** | Ningún campo del request influye en ningún campo de la spec. |
+| **I2** | Ningún campo del request **escribe** un valor de la spec. Lo único que el request influye es **cuál perfil del catálogo se elige** (`X-Perfil`), y un perfil sólo puede mover los cuatro campos de R4.6. |
+| **I8** | Dos perfiles cualesquiera del catálogo producen un `create` idéntico salvo `Image`, `Memory`, `MemorySwap` y `Ulimits[cpu]`. |
+| **I9** | La capa 2 nunca ve el nonce: lo consume la capa 1 antes de invocarla. |
 | **I3** | Un traversal exitoso en el tar igual falla al escribir, porque el rootfs es de solo lectura. |
 | **I4** | El contenedor del alumno no tiene red ni acceso al socket de Docker. |
 | **I5** | El código del alumno no puede producir el bloque de reporte. |
@@ -454,7 +712,14 @@ Cada una tiene un test en §13. Son las afirmaciones que se sostienen en la defe
 
 ## 13. Criterios de aceptación
 
-Las dos implementaciones corren esta misma suite. Cada test es una afirmación binaria.
+Cada test es una afirmación binaria. **Esta sección dice también lo que quedó sin cubrir y por
+qué**: una suite de aceptación que sólo enumera lo verde no es evidencia, es publicidad.
+
+> **Estado al 11‑sep‑2026.** La implementación de referencia (Java, rama `feat/catalogo-perfiles`)
+> corre **122 tests en verde** (`mvn test`, `BUILD SUCCESS`), incluidos `DesenmarcadoTest` (A8–A12)
+> y el caso del guion adverso de A38. La implementación en Node quedó de lado, así que donde este
+> documento decía «las dos implementaciones corren la misma suite» ahora hay una sola, y A2 quedó
+> sin contraparte (ver 13.1).
 
 ### 13.1 Golden test de la spec — el más importante
 
@@ -462,7 +727,23 @@ Las dos implementaciones corren esta misma suite. Cada test es una afirmación b
 
 > **C1 rompe este test a propósito.** Al agregar el ulimit `cpu`, el archivo de referencia queda viejo: se regenera **una vez**, se revisa el diff a ojo (tiene que ser exactamente una entrada nueva en `Ulimits`) y se comparte entre las dos implementaciones. Que A1 falle ante un cambio de la spec es el mecanismo funcionando; que no fallara sería la alarma.
 
-**A2** — El archivo de referencia es el mismo para Java y para Node. Si las dos implementaciones no producen el mismo JSON, una de las dos está mal.
+**A2** — ~~El archivo de referencia es el mismo para Java y para Node.~~ **Sin contraparte.** Con
+la implementación Node de lado, el archivo dejó de ser un contrato **entre** implementaciones y pasó
+a ser el golden de una sola. Además ya no sería byte a byte el mismo: el cuerpo que arma
+`docker-java` incluye los campos nulos del modelo y manda `RestartPolicy` como `{"Name":""}` en vez
+de `{"Name":"no"}` (para el daemon es lo mismo: `""` es la ausencia de política). Se anota como
+pérdida real, no como test que pasa.
+
+> **A1 y el catálogo (C7).** El golden fijo único dejó de tener sentido en el momento en que hay
+> más de un perfil: ahora `spec-create-referencia.json` es el golden **del perfil de referencia**
+> `java21-junit@4`, y lo que cubre la generalidad es A34 (R4.6), que compara dos perfiles distintos
+> entre sí. El par es más fuerte que el golden solo: uno fija los bytes exactos de un caso, el otro
+> fija que **el conjunto de lo que puede variar es cerrado**.
+
+**A1b** — El cuerpo del `create` que **el daemon recibió por el socket** es idéntico al que produce
+la serialización de A1. Este test existe porque, con la librería armando el pedido (C11), «el JSON
+que serializamos» y «el JSON que se mandó» dejaron de ser obviamente lo mismo. Sin él, A1 prueba
+una intención; con él, prueba un hecho.
 
 ### 13.2 Camino feliz
 
@@ -472,13 +753,32 @@ Las dos implementaciones corren esta misma suite. Cada test es una afirmación b
 
 ### 13.3 Protocolo
 
-**A6** — *El test que valida §7.* Imagen con entrypoint `sh -c 'read N; tar -tf - && echo "FIN $N"'`. Escribir nonce + tar, cerrar. Debe imprimir `FIN <nonce>` y el listado completo del tar. Si falla, §7 hay que rediseñarla y **este test bloquea todo lo demás**.
-**A7** — Verificar que la respuesta de `logs` trae `application/vnd.docker.multiplexed-stream`.
-**A8** — Con un tar armado para que la salida llegue en muchos frames chicos, verificar que el texto reconstruido es exacto.
-**A9** — Alimentar al demuxer con un stream sintético que declare un frame de 4 GiB: debe abortar sin reservar memoria.
-**A10** — Stream sintético con un frame de largo 0 en el medio: debe procesarse sin trabarse.
-**A11** — Stream sintético con tipo de stream `7`: debe ser error fatal, no asumirse stdout.
-**A12** — Stream sintético donde una línea cruza dos frames: el texto reconstruido no debe tener cortes espurios.
+**A6** — *El test que valida §7.* Escribir los **tres documentos** de R7.2 y cerrar; el contenedor
+debe reconstruir el nonce, el guion completo y el tar completo, **byte a byte**. Si falla, §7 hay
+que rediseñarla y **este test bloquea todo lo demás**. ✅ Corre contra un **daemon de Docker real**
+—nativo en Windows, por `npipe`—, no contra un doble.
+**A7** — Verificar que una salida **sin enmarcar** es `ERROR_DAEMON`. ⚠️ **Cambió de mecanismo**:
+ya no se mira el `Content-Type` de `logs`, porque con la librería (C11) esa respuesta no pasa por
+nuestras manos. Se detecta por **tipo de frame**: `docker-java` entrega la salida no enmarcada como
+frames `RAW` y el acumulador los rechaza. La guarda que importaba —no adivinar que eso es stdout—
+sigue cerrada; el camino por el que se llega a ella es otro.
+> **Cómo quedaron A8–A12 (`DesenmarcadoTest`).** El desenmarcado dejó de ser código nuestro: lo hace
+> `docker-java` (C11), y `AcumuladorTest` ya prueba lo que queda de nuestro lado (R6.4, R6.6, R6.7)
+> con `Frame` construidos a mano. Lo que le faltaba a esa cobertura era la cadena **entera**:
+> `docker-java` desenmarcando bytes crudos servidos por `DaemonDePrueba`, no `Acumulador` solo.
+> `DesenmarcadoTest` alimenta a `DaemonDePrueba` con encabezados armados a mano —algunos válidos,
+> otros corruptos a propósito— y llama a `Docker.logs` de punta a punta. El resultado no es el que
+> se esperaba leyendo el fuente de la librería, y hay que decirlo: **R6.2 ya no tiene un tope propio
+> que aborte con `ERROR_DAEMON`** — un largo de 4 GiB puede terminar en `ERROR_DAEMON`
+> (`ArrayIndexOutOfBoundsException`, ver R6.2) o en silencio, según qué haya bufferizado el
+> transporte en ese instante, y en ningún caso se reserva memoria por el largo declarado. **R6.5
+> corta y devuelve lo que llegó, en silencio, confirmado.** Las dos reescrituras están en §6.
+
+**A8** — ✅ Con un tar armado para que la salida llegue en muchos frames chicos, verificar que el texto reconstruido es exacto.
+**A9** — ✅ Alimentar a `docker-java` con un frame que declara 4 GiB: **no** se reserva memoria proporcional al largo declarado y el desenlace es inmediato, sea `ERROR_DAEMON` o el corte silencioso de R6.5 (ver R6.2).
+**A10** — ✅ Un frame de largo 0 en el medio no traba el bucle.
+**A11** — ✅ Un tipo de stream inválido (`RAW`, y también `STDIN`) es error fatal; no se asume stdout.
+**A12** — ✅ Una línea que cruza dos frames se reconstruye sin cortes espurios.
 
 ### 13.4 Entrada hostil
 
@@ -513,35 +813,218 @@ Los tars se construyen a mano (`tarfile` de Python permite armar cualquier entra
 
 **A31** — *(C2)* Contra un daemon de prueba que devuelve `State.OOMKilled: true` en el `inspect`, la respuesta trae `oomKilled: true`. Y contra uno que hace fallar el `inspect`, la respuesta trae `oomKilled: false` **y** el resto del resultado intacto: el fallo del paso 5b no aborta la ejecución (R5.10).
 
-**A32** — *(C1)* El JSON de `create` contiene el ulimit `cpu` con `TIMEOUT_CPU_SEGUNDOS`, y ese valor es menor que `TIMEOUT_EJECUCION_MS / 1000` (R4.1). Lo segundo es un assert sobre las constantes, no sobre el JSON: protege contra que alguien suba el presupuesto de CPU sin subir el reloj de pared y deje el límite decorativo sin que nada falle.
+**A32** — *(C1)* El JSON de `create` contiene el ulimit `cpu` con el `cpuS` del perfil, y ese valor
+es menor que `TIMEOUT_EJECUCION_MS / 1000` (R4.1). Lo segundo es un assert sobre **`CPU_MAX_S`**, el
+techo que el catálogo le hace cumplir a cualquier perfil, no sobre una constante única: protege
+contra que alguien suba el presupuesto de CPU sin subir el reloj de pared y deje el límite
+decorativo sin que nada falle. Cambió el sujeto del assert, no la afirmación.
 
 **A33** — *(C3)* Contra un contenedor de prueba que arranca y **no** consume stdin, con un bundle mayor al buffer del pipe: la escritura del paso 4 abandona al vencer su tope, el cupo de concurrencia se libera, y el resultado es `TIMEOUT` con el cierre registrado como incompleto (R8.5). Sin este test el bug es invisible: la suite queda verde y el ejecutor se traba en producción.
+
+### 13.7 Tests del catálogo y del modelo de dos capas *(C7–C10)*
+
+**A34** — *(C7, R4.6)* El `create` de **dos perfiles distintos** difiere **exactamente** en `Image`,
+`Memory`, `MemorySwap` y `Ulimits[cpu]`, y en nada más. Es el test que sostiene P1 e I2 ahora que la
+spec dejó de ser literalmente constante, y el que reemplaza al golden fijo único como afirmación
+general.
+
+**A35** — *(C7, R4.5)* ✅ Cada causa de rechazo del catálogo tiene que hacer fallar el **arranque
+del proceso**: JSON inválido, `memoriaMb` sobre `MEMORIA_MAX_MB`, `cpuS` sobre `CPU_MAX_S`,
+violación de R4.1, y guion sobre `MAX_SCRIPT_BYTES`. Una por una. Lo que el test tiene que afirmar
+no es que el perfil se rechaza, sino **cuándo**: al arrancar, no al ejecutar.
+
+> **Cómo quedó (`CatalogoTest`).** Los tests ejercitan `Catalogo.cargar`, que en `Main` corre antes
+> de conectar con Docker y de abrir el socket: si tira, el proceso nunca atiende una request. Cada
+> causa se prueba sola, con su valor límite (el techo exacto se acepta, uno más se rechaza) y
+> afirmando el mensaje de **esa** causa, no uno genérico: con `cpuS = CPU_MAX_S + 1` también se
+> viola R4.1, así que un test que buscara sólo «cpuS» seguiría en verde aunque se borrara el techo.
+> Se agregan un archivo inválido entre válidos (el catálogo entero no carga), que sólo se leen
+> `*.json`, y los campos obligatorios faltantes. Verificado con mutaciones: desactivar el techo de
+> memoria, el de CPU o el cálculo del hash pone en rojo el test correspondiente.
+>
+> **La causa «violación de R4.1» hoy es inalcanzable, y hay que decirlo.** `Catalogo` valida
+> `cpuS > CPU_MAX_S` antes que R4.1, y con `CPU_MAX_S = 30` y 60 s de reloj de pared ningún
+> `cpuS ≤ 30` cumple `cpuS * 2 > 60`. La rama existe y no se puede disparar: lo que la sostiene es
+> la relación entre constantes, y eso es lo que fija el test
+> (`a35_r4_1EsInalcanzableHoyConLasConstantesActuales`). Si alguien sube `CPU_MAX_S` por encima de
+> 30, ese test se pone en rojo y avisa que falta uno que dispare la excepción de verdad.
+
+**A36** — *(C8, C10)* `X-Perfil` ausente o malformado ⇒ `400`; bien formado y fuera del catálogo ⇒
+`422`; y la respuesta trae los **trece campos en el orden exacto** de §3.1, con los tres del perfil
+al final.
+
+**A37** — *(C7, R3.6)* ✅ `perfilHash` tiene que ser el SHA-256 de los bytes del guion, calculado
+al cargar, y un campo `hash` declarado en el JSON del perfil **no** debe leerse. R3.6 dice que este
+campo existe para que el worker pueda reconstruir con qué código exacto se evaluó una entrega.
+
+> **Cómo quedó.** El test calcula el hash por su cuenta, sin reusar el código bajo prueba, sobre un
+> guion con `ñ` (bytes ≠ caracteres). Y resuelve una ambigüedad de esta misma frase: «no debe
+> leerse» podía significar «se ignora». En el código **no se ignora: hace fallar la carga**. Jackson
+> rechaza por defecto las propiedades desconocidas y el registro del perfil no tiene un campo
+> `hash`, así que un perfil que lo declara no carga, como si fuera JSON inválido. Cumple la
+> propiedad que importa —un hash declarado nunca llega a ser `perfilHash`— y además es la lectura
+> más estricta: un campo con un nombre mal escrito tampoco pasa en silencio.
+
+**A38** — *(C9, R7.9, R7.11)* ✅ El largo se cuenta en bytes y no en caracteres: un test usa un guion
+con una `ñ` y afirma que el número que viaja es el de bytes —y, explícitamente, que **no** es el de
+caracteres—. El otro caso de R7.9 —un guion que contiene, en su propio texto, la línea que un
+protocolo ingenuo basado en texto elegiría como separador (un marcador de reporte falso, un magic de
+tar)— también tiene test: `EjecucionTest#a38_unGuionConLaLineaSeparadoraNoRompeElFraming` arma ese
+guion hostil y confirma que nonce, guion y tar llegan byte a byte igual, porque el protocolo nunca
+busca una marca de fin, cuenta bytes. Ya no es argumento sin test.
+
+**A39** — *(C9)* Los nueve bundles de referencia corren contra la **imagen real de dos capas**
+—`sandbox-runner:2.0.0-capa1`, no el fixture de busybox— con el ejecutor de por medio, y reproducen
+la tabla de resultados **sin divergencias**. Incluye los dos casos hostiles que antes sólo se habían
+confirmado invocando la imagen a mano.
+
+> **El resultado más interesante de A39, y conviene no perderlo.** En los casos de reporte hostil la
+> capa 2 termina diciendo «todo bien» (`exitEval=0`) y la capa 1 **sobrescribe el veredicto igual**,
+> con código interno `30`, porque detectó 6 procesos vivos después de que la evaluación dijo haber
+> terminado. Ése es el argumento entero del modelo de dos capas funcionando dentro de un test: no se
+> puede **prevenir** que la capa 2 mienta, se puede **detectar**, y la detección tiene que vivir en
+> la capa que la capa 2 no controla.
+
+**A40** — *(R5.12)* ✅ El arranque tiene que fallar si el daemon no soporta `VERSION_API_DOCKER`:
+contra un daemon de prueba compatible pasa; contra uno cuyo rango excluye la versión falla con un
+mensaje que nombra la causa y ambas versiones; contra uno que rechaza la propia llamada
+`/v1.43/version` con `400` ("client version ... is too old") falla como incompatibilidad y no como
+inalcanzable; y contra un daemon inexistente falla como inalcanzable. La comparación numérica
+`MinAPIVersion <= 1.43 <= ApiVersion` vive en una función pura y package-private, probada aparte de
+cualquier daemon: bordes inclusivos, por debajo del mínimo, por encima del máximo, la trampa
+numérica-vs-texto (`"1.9"` ordena después de `"1.43"` como string pero es menor como versión), y
+entradas malformadas.
+
+> **Cómo quedó (`DockerVersionTest`, `ProtocoloIT`).** `DaemonDePrueba` gana una ruta `/version`
+> configurable (`ApiVersion`, `MinAPIVersion`, y un modo que devuelve `400` con el mensaje de "too
+> old"). `DockerVersionTest` cubre la función pura y los cuatro escenarios contra el daemon de
+> mentira; `ProtocoloIT` agrega un test contra Docker real, que se saltea igual que el resto de la
+> suite si no hay daemon escuchando. Verificado con mutación: anular la mitad `MinAPIVersion` de la
+> comparación pone en rojo el caso de rango incompatible.
+
+**A41** — *(R5.13)* ✅ El arranque tiene que fallar si `DOCKER_HOST` no es `unix://` ni `npipe://`.
+`unix://` y `npipe://` se aceptan; `tcp://`, `http://`, `https://`, vacío, `null`, texto sin
+esquema reconocible y variantes de mayúsculas (`TCP://`) se rechazan con un mensaje que nombra la
+causa (el cierre abortivo del canal adjunto y el reset que produce sobre TCP). La comparación vive
+en una función pura y package-private (`Docker.validarTransporte`), en el mismo estilo que
+`versionCompatible` de A40, y se llama desde `Main` **antes** de `Docker.conectar` — a propósito
+no adentro de `conectar`, porque los tests siguen necesitando conectar contra el daemon de prueba,
+que es TCP.
+
+> **Sobre el daemon de prueba y la intermitencia que R5.13 explica.** `DaemonDePrueba` habla TCP
+> (ver su propio javadoc: docker-java resuelve el socket Unix con JNA sólo en Linux/macOS, así que
+> un socket Unix de Java en Windows no le sirve para probar el cliente real). Eso significa que la
+> suite sigue ejercitando, a propósito, el único transporte que R5.13 prohíbe en producción — y es
+> exactamente ahí donde el cierre abortivo puede llegar antes de que el kernel del otro lado
+> termine de entregar los bytes ya escritos, lo que hacía intermitentes bajo carga a
+> `EjecucionTest#elNonceEsDistintoCadaVez` y `EjecucionTest#framingDeTresDocumentos`. La solución no
+> es "arreglar" el cierre (seguiría siendo abortivo: no hay media-clausura en docker-java) sino
+> sacar esa carrera de la medición: `Docker` gana un hook de prueba (`alCerrarAdjunto`, `null` en
+> producción, cero cambio de comportamiento) que corre justo antes de cerrar el canal adjunto, y
+> `DaemonDePrueba` gana `esperarRecepcion(total)`, que cuenta bytes recibidos en el attach a medida
+> que llegan y deja que el test espere la confirmación antes de que el ejecutor cierre. Verificado
+> con un test de estrés temporal (200 KB de tar, 24 hilos quemando CPU, 150 y 300 iteraciones): con
+> el hook, 100% de las recepciones coincidieron con el tamaño esperado; sin él, la misma corrida
+> truncó 96/150. El seam no cambia nada de producción — ahí el transporte ya está restringido por
+> R5.13 a donde la medición no mostró pérdida.
+
+### 13.8 Cobertura real, incluido lo que falta
+
+| Grupo | Estado |
+|---|---|
+| A1, A1b, A32, A34 — la spec del contenedor y sus goldens | ✅ |
+| A36 — `X-Perfil` (`400`/`422`) y los trece campos en orden | ✅ |
+| A6, A39 — framing y los nueve bundles contra la imagen real | ✅ |
+| A7 — salida sin enmarcar | ✅ por tipo de frame (cambió el mecanismo) |
+| A21, A26, A27, A31, A33 | ✅ |
+| **A38** — framing con guion adverso | ✅ `EjecucionTest` (conteo en bytes y la línea separadora, los dos casos de R7.9) |
+| **A8–A12** — corrupción del stream | ✅ `DesenmarcadoTest`, caja negra contra la cadena real `docker-java` → `Acumulador` → `Docker.logs` (R6.2 y R6.5 reescritas en §6 con lo que la cadena real garantiza) |
+| **A35, A37** — validaciones del catálogo y `perfilHash` | ✅ `CatalogoTest`, 19 tests. La causa R4.1 es inalcanzable con las constantes actuales y se fija como relación, no como excepción |
+| **A40** — verificación de versión del daemon al arrancar | ✅ `DockerVersionTest` (comparación pura + daemon de prueba), y contra Docker real en `ProtocoloIT` |
+| **A41** — rechazo de transporte `tcp://` al arrancar | ✅ `DockerTransporteTest` (comparación pura, sin daemon) |
+| **A2** — golden compartido con Node | ❌ **sin contraparte**: la implementación Node quedó de lado |
+| **A3–A5, A13–A20, A22–A25, A28–A30** | ❌ **fuera del alcance acordado**: son tests de la **imagen**, no del ejecutor. A13–A20 en particular verifican la extracción del tar, que ocurre en `capa1.sh` (I7: el ejecutor no desempaqueta nada) |
+
+**R13.1** — Lo que falta **NO DEBE** presentarse como una misma «cobertura pendiente». Cada caso
+tiene un motivo distinto y una salida distinta:
+
+| Falta | Qué es | Cómo se salda |
+|---|---|---|
+| **A2** | **Decisión ya tomada** | Nada: hay una sola implementación |
+| **A3–A5, A13–A20, A22–A25, A28–A30** | **Cambio de dueño** | Su lugar es la suite de la imagen, no la del ejecutor |
+
+Meterlas en la misma bolsa es lo que después se defiende mal: «faltan tests» invita a que pregunten
+por el peor de los dos, y ninguno de los dos es realmente un agujero de este componente.
+
+> **A38 y A8–A12 salieron de esta tabla (11-sep-2026).** Las dos eran deuda barata y las dos se
+> saldaron con test: A38 con el caso del guion adverso (`EjecucionTest`) y A8–A12 con
+> `DesenmarcadoTest` contra la cadena real. Ninguna quedó como «cambio de requisito» — R6.2 y R6.5
+> siguen siendo afirmaciones de la spec, reescritas en §6 con lo que la cadena real garantiza en vez
+> de lo que garantizaba nuestro demultiplexor.
 
 ---
 
 ## 14. Dimensionamiento
 
-Estimación para presupuestar el trabajo, no un compromiso.
+Estimación para presupuestar el trabajo, no un compromiso. Las dos últimas columnas son **líneas
+efectivas medidas**, sin comentarios ni blancos: `Java v1` es la primera implementación (cliente
+HTTP a mano, una sola capa), `Java hoy` es la de la rama `feat/catalogo-perfiles`.
 
-Estimación inicial y, en la columna de la derecha, lo que efectivamente salió en Java (líneas efectivas, sin comentarios ni blancos).
+| Módulo | Java est. | Node est. | Java v1 | **Java hoy** | Qué hace |
+|---|---|---|---|---|---|
+| Cliente HTTP sobre socket Unix | 200–250 | 20–30 | 271 | **295** | `Http` (108) para hablarle al worker + `Docker` (187) para las llamadas de §5 sobre `docker-java` |
+| Spec del contenedor | 60 | 50 | 90 | **74** | Constantes + serialización |
+| Demultiplexador | 60 | 60 | 53 | **47** | Lo que quedó de nuestro lado de §6 |
+| Extracción del reporte | — | — | 27 | **27** | §7.5–§7.8 |
+| Orquestación de la secuencia | 80 | 80 | 137 | **115** | Los 7 pasos, timeouts, limpieza garantizada |
+| Servidor HTTP + cola | 70 | 50 | 217 | **230** | `/ejecutar`, `/salud`, semáforo, validación de `X-Perfil` |
+| Barrido de huérfanos | 40 | 40 | 26 | **26** | §10 |
+| Cableado y frontera | — | — | 48 | **80** | `Main`, `Motor`, `Log`, `ErrorDaemon`, `Constantes` |
+| **Entrada** *(C9, nuevo)* | — | — | — | **62** | El framing de tres documentos, R7.2, R7.9–R7.11, R8.5 |
+| **Catálogo** *(C7, nuevo)* | — | — | — | **108** | §4.4: carga y valida el catálogo al arrancar |
+| **Total propio** | **~510–560** | **~300–310** | **869** | **1064** | Sin tests |
 
-| Módulo | Java est. | Node est. | **Java real** | Qué hace |
-|---|---|---|---|---|
-| Cliente HTTP sobre socket Unix | 200–250 | 20–30 | **271** | Request, respuesta, `chunked`, upgrade a `101` |
-| Spec del contenedor | 60 | 50 | **90** | Constantes + serialización |
-| Demultiplexador | 60 | 60 | **53** | El bucle de §6 |
-| Extracción del reporte | — | — | **27** | §7.5–§7.8 |
-| Orquestación de la secuencia | 80 | 80 | **137** | Los 7 pasos, timeouts, limpieza garantizada |
-| Servidor HTTP + cola | 70 | 50 | **217** | `/ejecutar`, `/salud`, semáforo |
-| Barrido de huérfanos | 40 | 40 | **26** | §10 |
-| Cableado y frontera | — | — | **48** | `Main`, `Motor`, `Log`, `ErrorDaemon` |
-| **Total propio** | **~510–560** | **~300–310** | **869** | Sin tests |
+**La estimación se quedó corta por 300 líneas, y el motivo importa para la comparación.** Contaba
+una sola vez el costo de los sockets Unix, del lado del cliente. En realidad se paga **dos** veces:
+`java.net.http.HttpClient` no habla sockets Unix (JDK-8377806), y `com.sun.net.httpserver` solo
+bindea `InetSocketAddress`, así que también hay que escribir a mano el **servidor**. Por eso
+`Servidor` triplica lo estimado. En Node los dos lados vienen en la librería estándar.
 
-**La estimación de Java se quedó corta por 300 líneas, y el motivo importa para la comparación.** Contaba una sola vez el costo de los sockets Unix, del lado del cliente. En realidad se paga **dos** veces: `java.net.http.HttpClient` no habla sockets Unix (JDK-8377806), y `com.sun.net.httpserver` solo bindea `InetSocketAddress`, así que también hay que escribir a mano el **servidor**. Por eso `Servidor` triplica lo estimado. En Node los dos lados vienen en la librería estándar.
+**El port a `docker-java` (C11) no achicó el código, y conviene decir por qué en vez de dejarlo
+como una sorpresa.** Se esperaba bajar de 869 a ~530. Salió 1064. Tres motivos, ninguno sorpresa
+retrospectiva:
 
-**R14.0** — Cuando la implementación en Node esté, la comparación **DEBE** hacerse sobre esta misma tabla, con líneas efectivas medidas igual. El objetivo de R11.5 (< 400 líneas) no se cumplió en Java; si Node tampoco lo alcanza, el que hay que revisar es el objetivo, no las implementaciones.
+- **El port en sí es casi neutro.** Se fueron `ClienteDocker` (174) y el demultiplexor (53), y
+  entraron `Docker` (187) y `Acumulador` (47). La librería ahorra el HTTP crudo, pero hay que
+  reconstruirle encima la semántica que no trae: el EOF de stdin (R5.11), el tope por llamada y la
+  guarda contra la salida sin enmarcar (A7).
+- **`Http` no se fue.** La estimación lo contaba como ahorro y estaba equivocada: `Http` lo usa
+  `Servidor` para hablar con el worker, que no tiene nada que ver con Docker. Sacar la librería de
+  un lado no toca el otro lado.
+- **Lo que creció es funcionalidad nueva, no plomería**: `Entrada` (62) es el framing de tres
+  documentos y `Catalogo` (108) es el catálogo de perfiles. Juntos son 170 líneas que antes no
+  existían porque la funcionalidad tampoco.
 
-**R14.1** — Terminadas las dos implementaciones, **DEBE** hacerse una revisión línea por línea de la que se elija, por dos personas que no la escribieron, con las observaciones anotadas y versionada en el repo. El argumento de que elegimos un lenguaje que el equipo puede auditar solo vale si efectivamente lo auditamos: "podemos leerlo" es una hipótesis, "lo leímos" es evidencia.
+Lo que sí se ahorró es la orquestación, que bajó de 137 a 115: ya no hay watchdogs propios, ni hilos
+para acotar el `wait`, ni escritura manual de stdin.
+
+**R14.0** — ~~Cuando la implementación en Node esté, la comparación DEBE hacerse sobre esta misma
+tabla.~~ **Sin contraparte**: la implementación en Node quedó de lado (§13). La columna `Node est.`
+se conserva como lo que es —una estimación que nunca se contrastó— y **NO DEBE** citarse como si
+fuera una medición.
+
+**R14.2** — ~~El objetivo de R11.5 (< 400 líneas) no se cumplió y ya no va a cumplirse: 1064 líneas
+es 2,6× el objetivo. Corresponde una de dos cosas, y hay que elegir explícitamente: bajar el alcance
+del componente, o cambiar el objetivo dejando escrito el argumento nuevo.~~ **Elegido (11-sep-2026):
+se cambió el objetivo.** R11.5 quedó derogada con el argumento por escrito en §11.5: el número se
+sabía incumplido y dejarlo escrito no disciplinaba nada. Lo que no correspondía —dejar el número en
+400 y las líneas en 1064 sin elegir— ya no es el estado de este documento.
+
+**R14.1** — Terminadas las implementaciones, **DEBE** hacerse una revisión línea por línea de la que
+se elija, por dos personas que no la escribieron, con las observaciones anotadas y versionada en el
+repo. El argumento de que elegimos un lenguaje que el equipo puede auditar solo vale si efectivamente
+lo auditamos: «podemos leerlo» es una hipótesis, «lo leímos» es evidencia. **Con R11.5 derogada
+(§11.5), ésta es la única garantía de auditabilidad que le queda al componente, y sigue pendiente.**
 
 ---
 
@@ -553,4 +1036,7 @@ Estimación inicial y, en la columna de la derecha, lo que efectivamente salió 
 - JDK-8377806, *HTTP over Unix Domain Sockets*; JEP 380, *Unix domain socket channels*.
 - CVE-2025-45582 — GNU tar ≤ 1.35, traversal en dos extracciones; el motivo de no reutilizar `/work`.
 - CVE-2025-52565 — runc; solo afecta contenedores con `Tty: true`.
-- Documentos hermanos: `03-ms-sandbox-ejecucion.md` (por qué la entrega va por stdin), `05-ms-sandbox-patrones.md` (por qué ejecutor y no proxy).
+- Documentos hermanos: `03-ms-sandbox-ejecucion.md` (por qué la entrega va por stdin), `05-ms-sandbox-patrones.md` (por qué ejecutor y no proxy), `11-impacto-v4-g5.md` (el análisis del V4 que originó C7–C12).
+- `ms-sandbox/imagenes/capa1/capa1.sh` — **la capa 1**: el entrypoint de §4.1, quien extrae el tar, invoca a la capa 2 y arma el sobre. Las reglas de extracción que esta spec **no** fija (I7) viven ahí.
+- `../../HANDOFF-opcion1.md` — el plan de la Opción 1 y la tabla de resultados de los nueve bundles (A39).
+- `ms-sandbox/ejecutor/README.md` — la implementación de referencia: dónde vive cada cosa, qué se perdió con el port y las dos intermitencias que aparecieron al cerrar la validación.

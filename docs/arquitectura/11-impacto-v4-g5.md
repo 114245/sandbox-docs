@@ -36,9 +36,10 @@
 
 ## 1. De dónde viene el V4
 
-El pedido de fondo del Grupo 5 es que **nuestro contenedor no sepa nada del ejercicio**. Hoy
-`sandbox/runner/entrypoint.sh` sabe Java: llama a `javac` en dos fases, arma el classpath, deriva
-los nombres de clase e invoca el `ConsoleLauncher` de JUnit. Con eso, cada tipo de desafío nuevo
+El pedido de fondo del Grupo 5 es que **nuestro contenedor no sepa nada del ejercicio**. Hasta acá
+el `entrypoint.sh` de una sola capa (eliminado del repo tras adoptar el modelo de dos capas; ver
+historial de git) sabía Java: llamaba a `javac` en dos fases, armaba el classpath, derivaba
+los nombres de clase e invocaba el `ConsoleLauncher` de JUnit. Con eso, cada tipo de desafío nuevo
 —ArchUnit, PMD, completado de código— es un cambio en **nuestro** código y un redespliegue nuestro.
 El acoplamiento es real y la queja es legítima.
 
@@ -111,8 +112,9 @@ de seguridad, porque **esas propiedades no viven en el medio, viven en los extre
 └─────────────────────────────────────────────────────┘
 ```
 
-Todo lo que hoy está cableado en el medio de `sandbox/runner/entrypoint.sh` —`javac`, la derivación
-de nombres de clase, el `ConsoleLauncher`— **sale de nuestra imagen** y se va a vivir al `run.sh`.
+Todo lo que estaba cableado en el medio del `entrypoint.sh` de una sola capa (eliminado del repo;
+ver historial de git) —`javac`, la derivación de nombres de clase, el `ConsoleLauncher`— **sale de
+nuestra imagen** y se va a vivir al `run.sh`.
 
 ### 2.3 Qué gana cada uno
 
@@ -393,8 +395,8 @@ obligatorio: sería trasladarles un requisito nuestro disfrazado de contrato.
 
 ## 3. El diff fino: su capa 1 contra nuestra tapa
 
-Nuestro `sandbox/runner/entrypoint.sh` (456 líneas) ya está estructurado como el sándwich, aunque
-todavía tenga el relleno de Java cableado adentro:
+Nuestro `entrypoint.sh` de una sola capa (456 líneas, eliminado del repo; ver historial de git) ya
+estaba estructurado como el sándwich, aunque todavía tuviera el relleno de Java cableado adentro:
 
 ```
 paso 1   leer nonce + leer y VALIDAR el tar + extraer          ← tapa de arriba
