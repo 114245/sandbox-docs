@@ -306,17 +306,17 @@ Una sola corrida verde no prueba que una intermitencia se fue. La evidencia acep
 
 ## Pendientes
 
-1. **La spec `08-spec-ejecutor.md` está desactualizada** respecto de todo lo anterior: §3.1, §3.3,
-   §4, §7.2, §11.4, §13, §14, y ahora también el catálogo de perfiles (Pasos 1 y 2). Se actualiza
-   entera de una vez cuando cierre la validación.
+1. ~~La spec `08-spec-ejecutor.md` está desactualizada~~ **resuelto** (commit `b008f58`): se
+   actualizó entera al catálogo de perfiles — §3, §4, §7, §11-§14 — y sigue creciendo con cada
+   cambio (última incorporación: R5.12 / A40, ítem 4 de esta lista).
 2. **R11.5 (< 400 líneas) sigue sin cumplirse**, y ahora por más: ~1066 de código efectivo, con
    `Catalogo` como el módulo nuevo más grande. El argumento de §14 no cambia; el número sí.
-3. **R10.2 quedó desactualizada por C1.** Dice que `EDAD_HUERFANO_MS` es «20 veces mayor» que
-   `TIMEOUT_EJECUCION_MS`, pero con el reloj de pared en 60 s la relación pasó a ser de 10 veces.
-4. **La versión mínima de API que acepta el daemon varía entre builds del Engine.** Con 29.2.1 el
-   `create` con `v1.43` fue rechazado; con 29.7.2, que reporta `MinAPIVersion 1.40`, A6 pasa.
-   Conviene que el despliegue fije la versión del Engine y que el arranque verifique `MinAPIVersion`
-   contra `VERSION_API_DOCKER`, en vez de descubrirlo en la primera ejecución de un alumno.
+3. ~~R10.2 quedó desactualizada por C1~~ **resuelto**: el texto actual de R10.2 ya dice «10 veces
+   mayor» (600 s contra 60 s), no «20 veces».
+4. ~~La versión mínima de API que acepta el daemon varía entre builds del Engine~~ **hecho**: el
+   arranque verifica ahora `MinAPIVersion <= VERSION_API_DOCKER <= ApiVersion` contra el daemon
+   (`Docker.verificarVersion`, R5.12 / A40) y falla ruidoso, sin reintentos, antes de abrir el
+   socket del ejecutor o programar el barrido.
 5. **El fat jar de 21 MB.** Podar las dependencias que `docker-java-core` arrastra y no usamos.
 6. **R14.1**: falta la revisión línea por línea por dos personas que no escribieron el código.
 7. ~~Paso 4 del handoff~~ **hecho** (10/09): `BundlesIT`, contra `sandbox-runner:2.0.0-capa1` real,
