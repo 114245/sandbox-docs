@@ -891,6 +891,6 @@ por 2,6×, ésta es la única garantía de auditabilidad que le queda al compone
 - CVE-2025-45582 — GNU tar ≤ 1.35, traversal en dos extracciones; el motivo de no reutilizar `/work`.
 - CVE-2025-52565 — runc; solo afecta contenedores con `Tty: true`.
 - Documentos hermanos: `03-ms-sandbox-ejecucion.md` (por qué la entrega va por stdin), `05-ms-sandbox-patrones.md` (por qué ejecutor y no proxy), `11-impacto-v4-g5.md` (el análisis del V4 que originó C7–C12).
-- `sandbox/runner/capa1.sh` — **la capa 1**: el entrypoint de §4.1, quien extrae el tar, invoca a la capa 2 y arma el sobre. Las reglas de extracción que esta spec **no** fija (I7) viven ahí.
+- `ms-sandbox/imagenes/capa1/capa1.sh` — **la capa 1**: el entrypoint de §4.1, quien extrae el tar, invoca a la capa 2 y arma el sobre. Las reglas de extracción que esta spec **no** fija (I7) viven ahí.
 - `../../HANDOFF-opcion1.md` — el plan de la Opción 1 y la tabla de resultados de los nueve bundles (A39).
-- `java sidecar test/README.md` — la implementación de referencia: dónde vive cada cosa, qué se perdió con el port y las dos intermitencias que aparecieron al cerrar la validación.
+- `ms-sandbox/ejecutor/README.md` — la implementación de referencia: dónde vive cada cosa, qué se perdió con el port y las dos intermitencias que aparecieron al cerrar la validación.

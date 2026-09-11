@@ -301,9 +301,9 @@ flowchart TD
     TAPA1 --> RELLENO --> TAPA2
 ```
 
-Todo lo que hoy está cableado en el medio de `sandbox/runner/entrypoint.sh` —`javac`, la
-derivación de nombres de clase, el `ConsoleLauncher` de JUnit— **sale de nuestra imagen** y se
-va a vivir al `run.sh` del Grupo 5.
+Todo lo que estaba cableado en el medio del `entrypoint.sh` de una sola capa (eliminado del repo;
+ver historial de git) —`javac`, la derivación de nombres de clase, el `ConsoleLauncher` de JUnit—
+**sale de nuestra imagen** y se va a vivir al `run.sh` del Grupo 5.
 
 ### 5.3 Qué gana cada uno
 
@@ -431,9 +431,10 @@ O sea que **el espacio realmente libre va del 3 al 125**. Y los de arriba nos im
 porque son justo los accidentes que queremos poder diagnosticar: si el Grupo 5 usara `1` para "no
 compila", no podríamos distinguirlo de "el shell se rompió".
 
-**Lo que ya existe: la banda `20–31` no es una propuesta.** Es lo que ya está implementado en
-`sandbox/runner/entrypoint.sh`, en la función `codigo_de()`: doce códigos, probados contra la
-suite hostil.
+**Lo que ya existe: la banda `20–31` no es una propuesta.** Es lo que estaba implementado en la
+función `codigo_de()` del `entrypoint.sh` de una sola capa (eliminado del repo; ver historial de
+git): doce códigos, probados contra la suite hostil. La capa 1 vigente (`capa1.sh`) hereda el
+mismo criterio.
 
 **Lo arbitrario, que vale lo que cuesta —nada—:**
 
@@ -999,4 +1000,5 @@ que terminaron las pruebas. Es la señal de que el reporte pudo haber sido reesc
   verdad: si este documento la contradice, manda ella.
 - [`03-ms-sandbox-ejecucion.md`](./03-ms-sandbox-ejecucion.md) — por qué el paquete entra por
   stdin, y el análisis de los ataques.
-- `sandbox/runner/entrypoint.sh` — el script que este cambio parte en dos.
+- `entrypoint.sh` — el script que este cambio parte en dos; era el runner de una sola capa,
+  eliminado del repo (ver historial de git). Lo reemplazan `capa1.sh` y el catálogo de perfiles.

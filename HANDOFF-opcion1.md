@@ -5,7 +5,7 @@
 **Estado:** capa 1 del contenedor construida y verificada. **Ejecutor Java: portado a `docker-java` y
 hablando el framing de tres documentos** (10/09). Falta el catalogo de perfiles (Paso 1) y
 `Servidor`/`X-Perfil` (Paso 2). El detalle de lo que se gano y lo que se perdio en el port esta en
-`java sidecar test/README.md`, que quedo actualizado; lo de aca abajo se conserva como el
+`ms-sandbox/ejecutor/README.md`, que quedo actualizado; lo de aca abajo se conserva como el
 razonamiento previo.
 
 ---
@@ -17,10 +17,13 @@ usuario: *"todo esto es a modo de validar que lo que planificamos funciona; en e
 re-ensamblaríamos esto"*. Consecuencias prácticas:
 
 - No hay documento de diseño formal ni plan escrito, a propósito.
-- **`java sidecar test/08-spec-ejecutor.md` NO se toca** hasta que la validación cierre. La idea es
+- **`ms-sandbox/ejecutor/08-spec-ejecutor.md` NO se toca** hasta que la validación cierre. La idea es
   actualizarla entera de una vez con lo aprendido, en vez de parchearla mientras cambia.
-- La implementación **Node (`node-sidecar-test/`) quedó de lado**. No se borra. Consecuencia: §14 y
+  *(Nota de la reorganización del repo: esa copia se eliminó; la spec vigente, ya actualizada, es
+  `docs/arquitectura/08-spec-ejecutor.md`.)*
+- La implementación **Node (`node-sidecar-test/`) quedó de lado**. Consecuencia: §14 y
   R14.0/R11.5 de la spec pierden su fundamento — existían para comparar dos implementaciones.
+  *(Nota de la reorganización del repo: el prototipo Node se eliminó del repo; ver historial de git.)*
 
 Lo que sigue está ordenado para que puedas trabajar sin releer los PDF ni la spec entera.
 
@@ -42,7 +45,7 @@ Documentos fuente, por orden de utilidad:
 | `otros/Respuesta_G8_a_Propuesta_V4.md` | **El contrato.** Lo que la capa 1 implementa. Empezá acá |
 | `propuesta-arquitectura-sandbox.md` | Arquitectura que circula en el grupo. **Tiene agujeros, ver §4** |
 | `Propuesta_Integracion_G5_G6_Entrypoint_V4.pdf` | La propuesta de G5 |
-| `java sidecar test/08-spec-ejecutor.md` | La spec del ejecutor. Desactualizada respecto de todo esto |
+| `docs/arquitectura/08-spec-ejecutor.md` | La spec del ejecutor. Desactualizada respecto de todo esto *(en su momento; ya actualizada)* |
 
 ---
 
@@ -176,15 +179,18 @@ Se van `ClienteDocker` (174), `Http` (108) y `Demultiplexor` (53) ≈ **335 lín
 
 ## 6. Qué está construido y verificado
 
-Todo en `sandbox/runner/`. **El `entrypoint.sh` viejo quedó intacto a propósito, como línea de base.**
+Todo en `sandbox/runner/` (nombre de entonces). *(Nota de la reorganización del repo: ese árbol se
+repartió en `ms-sandbox/imagenes/`, `ms-sandbox/perfiles/` y `ms-sandbox/pruebas/`; el `entrypoint.sh`
+viejo, de una sola capa, que se conservaba a propósito como línea de base, se eliminó del repo — ver
+historial de git.)*
 
-| Archivo | Qué es |
-|---|---|
-| `capa1.sh` | **La capa 1 de G8**, 397 líneas POSIX sh. El nuevo ENTRYPOINT |
-| `perfiles/java21-junit.sh` | La capa 2 de referencia — lo que en el modelo real escribe G5. Códigos de la banda 40-59 |
-| `Dockerfile.capa1` | → imagen `sandbox-runner:2.0.0-capa1` |
-| `probar-capa1.sh` | Arma el stdin de tres documentos a mano. **Es el molde de lo que tiene que hacer `Ejecucion.java`** |
-| `entrypoint.sh` | El viejo, de una sola capa. No lo toques, es la línea de base |
+| Archivo (nombre de entonces) | Dónde vive ahora | Qué es |
+|---|---|---|
+| `capa1.sh` | `ms-sandbox/imagenes/capa1/capa1.sh` | **La capa 1 de G8**, 397 líneas POSIX sh. El nuevo ENTRYPOINT |
+| `perfiles/java21-junit.sh` | `ms-sandbox/perfiles/java21-junit.sh` | La capa 2 de referencia — lo que en el modelo real escribe G5. Códigos de la banda 40-59 |
+| `Dockerfile.capa1` | `ms-sandbox/imagenes/java21-junit/Dockerfile` | → imagen `sandbox-runner:2.0.0-capa1` |
+| `probar-capa1.sh` | `ms-sandbox/pruebas/probar-capa1.sh` | Arma el stdin de tres documentos a mano. **Es el molde de lo que tiene que hacer `Ejecucion.java`** |
+| `entrypoint.sh` | *(eliminado)* | El viejo, de una sola capa. Se conservaba como línea de base; ver historial de git |
 
 ### Verificación contra Docker real (09/09)
 
@@ -281,7 +287,7 @@ Portar `probar-capa1.sh` a Java. Es mecánico: el script ya demuestra el orden e
 
 - `hostil-paquete` y `hostil-red` dieron `OK` y **no hay línea de base registrada** para ellos:
   nunca habían pasado por el ejecutor, sólo por `run.sh`. Confirmalo con el usuario.
-- `sandbox/runner/README.md` todavía describe el modelo de una sola capa.
+- `ms-sandbox/imagenes/README.md` todavía describe el modelo de una sola capa.
 - La spec `08-spec-ejecutor.md`, entera, cuando la validación cierre: §3.1, §3.3, §4, §7.2, §11.4,
   §13, §14.
 
@@ -290,14 +296,15 @@ Portar `probar-capa1.sh` a Java. Es mecánico: el script ya demuestra el orden e
 ## 8. Cómo correr las cosas
 
 ```bash
-cd sandbox-docs/sandbox/runner
-docker build -f Dockerfile.capa1 -t sandbox-runner:2.0.0-capa1 .
+cd sandbox-docs
+docker build -f ms-sandbox/imagenes/java21-junit/Dockerfile -t sandbox-runner:2.0.0-capa1 ms-sandbox/imagenes
+cd ms-sandbox/pruebas
 ./probar-capa1.sh bundles/ok-suma
-./probar-capa1.sh bundles/hostil-cpu perfiles/java21-junit.sh
+./probar-capa1.sh bundles/hostil-cpu ../perfiles/java21-junit.sh
 ```
 
 ```bash
-cd "sandbox-docs/java sidecar test"
+cd sandbox-docs/ms-sandbox/ejecutor
 mvn test        # los *IT se saltean si no hay socket del daemon
 mvn package     # target/ejecutor.jar
 ```

@@ -157,7 +157,7 @@ Ninguna se resuelve rehaciendo código nuestro (`11` §12).
 
 | # | Pendiente | Cómo cerró |
 |---|---|---|
-| **P0** | **El ejecutor y la imagen del runner nunca se corrieron juntos** | **Cerrado el 4-sep-2026.** El ejecutor Node contra `sandbox-runner:1.0.0` con `bundles/ok-suma`: `COMPLETADA`, `exitCode 0`, 3 tests, 0 fallas, veredicto `EXITO`. Arnés versionado en `node-sidecar-test/scripts/integracion-runner.mjs` |
+| **P0** | **El ejecutor y la imagen del runner nunca se corrieron juntos** | **Cerrado el 4-sep-2026.** El ejecutor Node contra `sandbox-runner:1.0.0` con `bundles/ok-suma`: `COMPLETADA`, `exitCode 0`, 3 tests, 0 fallas, veredicto `EXITO`. Arnés versionado en `integracion-runner.mjs`, del prototipo Node, eliminado del repo; ver historial de git |
 | **P1** | El entrypoint no implementaba el nonce de `08` §7 | **Cerrado.** Implementado y verificado: lee la primera línea de stdin en una variable no exportada y emite el reporte entre `---SANDBOX-<nonce>-INICIO/FIN---`. El `read` de bash no consume más allá del `
 `, que era lo que §7 pedía probar |
 | **P1b** | La spec montaba el tmpfs en `/work` y el entrypoint escribía en `/tmp` | **Cerrado a favor de la spec.** El entrypoint escribe todo bajo `/work`; `HOME` y `WORKDIR` acompañan |
@@ -174,9 +174,11 @@ veredicto de ser falso), los tres relojes y el ulimit `cpu` (fijados en `08` §4
 
 | Ruta | Qué es |
 |---|---|
-| `sandbox/runner/` | La imagen de ejecución, alineada con la spec `08` §4.1: `Dockerfile`, `entrypoint.sh` (con el nonce de §7), `run.sh` y `suite-hostil.sh` — **9/9 casos contenidos** |
-| `java sidecar test/` | Implementación del ejecutor en Java 21. **869 líneas** efectivas, 58 tests. Verificada contra la imagen real corriéndola **como contenedor** (ver nota abajo) |
-| `node-sidecar-test/` | Implementación del ejecutor en Node 22 + TypeScript. **626 líneas** efectivas, 65/65 tests. Verificada contra la imagen real (`scripts/integracion-runner.mjs`) |
+| `ms-sandbox/imagenes/` | Las imágenes de ejecución, alineadas con la spec `08` §4.1: `java21-junit/Dockerfile` (capa 1 + herramientas) y `capa1/capa1.sh` (el entrypoint, con el nonce de §7) — **9/9 casos hostiles contenidos** (ver `ms-sandbox/pruebas/`). El `Dockerfile`, `entrypoint.sh`, `run.sh`, `build.sh`, `suite-hostil.sh` y `ver-reporte.sh` de una sola capa se eliminaron del repo al pasar al modelo de dos capas; ver historial de git |
+| `ms-sandbox/perfiles/` | El catálogo de perfiles: `java21-junit@3.json` y el script de la capa 2 que referencia, `java21-junit.sh` |
+| `ms-sandbox/pruebas/` | El banco de pruebas: `bundles/` (los nueve casos, camino feliz y hostiles) y `probar-capa1.sh`, el arnés de dos capas |
+| `ms-sandbox/ejecutor/` | Implementación del ejecutor en Java 21. **869 líneas** efectivas, 58 tests. Verificada contra la imagen real corriéndola **como contenedor** (ver nota abajo) |
+| `node-sidecar-test/` *(eliminado)* | Implementación del ejecutor en Node 22 + TypeScript, **626 líneas** efectivas, 65/65 tests, quedó de lado al validar la Opción 1 en Java; se eliminó del repo, ver historial de git |
 | `hallazgos-investigacion-sandbox.md` | Investigación externa sobre el sandbox: CVEs de Judge0 y Ares, papers, fuentes. Lo que trajo está marcado **[IE]** en los documentos |
 | `docs/respuesta-sidecar-ejecutor.md` | Respuesta a la investigación del **ejecutor**: el rediseño que elimina el `attach` hijacked, y tres correcciones al briefing |
 | `docs/briefing-investigacion-*.md` | Los dos briefings autocontenidos que se llevaron a fuentes externas |
