@@ -425,6 +425,27 @@ o su rango no incluye `VERSION_API_DOCKER`, el arranque **DEBE** fallar de inmed
 reintentos: el mismo criterio de R4.5 para el catálogo — un error de despliegue tiene que ser
 ruidoso e inmediato, nunca aparecer recién en la primera ejecución de un alumno.
 
+**R5.13** — El único transporte permitido en producción es `unix://` o `npipe://`; el arranque
+**DEBE** fallar de inmediato (antes de conectar a Docker) si `DOCKER_HOST` es cualquier otra cosa,
+incluido `tcp://`, `http://`, `https://`, vacío o malformado. El paso 4 de esta misma sección
+(«escribir y cerrar el socket adjunto entero») es lo que le da EOF a stdin del contenedor, y
+docker-java no ofrece una media-clausura ordenada: ese cierre es **abortivo** (termina en
+`request.abort()` del transporte httpclient5). Sobre TCP, un cierre abortivo llega al otro lado
+como un *reset* (RST), y un RST hace que el kernel receptor descarte los bytes que ya llegaron
+pero que la aplicación todavía no leyó — la entrega no es atómica con la escritura, y `Entrada`
+sólo puede reportar los bytes que la librería leyó y flusheó de este lado, no los que el otro
+lado efectivamente conservó.
+
+Se midió con un daemon de mentira por TCP en loopback (200 KB de tar, 24 hilos quemando CPU,
+150 ejecuciones): Windows truncó 115/150 y Linux 44/150; incluso un stdin chico de 56 bytes se
+perdió entero 2/300 veces en reposo y 31/300 bajo carga. Contra Docker real por *unix socket*
+(Linux) llegaron 60/60 completos, y por *named pipe* (Windows) 39/40 (más un `ERROR_DAEMON` sin
+explicar, no truncamiento). De ahí el corte: `unix://` y `npipe://` son los transportes donde la
+medición no mostró pérdida, y son además los dos que Windows y Linux exponen de forma nativa
+(§5, nota de por qué docker-java y no el cliente a mano). Esto no arregla la causa de fondo —
+seguiría haciendo falta una media-clausura ordenada, que docker-java no expone—, sólo la saca de
+producción restringiendo el transporte a donde la medición no la mostró.
+
 | # | Llamada | Notas |
 |---|---|---|
 | 1 | `POST /containers/create?name=sandbox-<id>` | Cuerpo de §4.1. `Content-Type: application/json` |
@@ -837,6 +858,32 @@ entradas malformadas.
 > suite si no hay daemon escuchando. Verificado con mutación: anular la mitad `MinAPIVersion` de la
 > comparación pone en rojo el caso de rango incompatible.
 
+**A41** — *(R5.13)* ✅ El arranque tiene que fallar si `DOCKER_HOST` no es `unix://` ni `npipe://`.
+`unix://` y `npipe://` se aceptan; `tcp://`, `http://`, `https://`, vacío, `null`, texto sin
+esquema reconocible y variantes de mayúsculas (`TCP://`) se rechazan con un mensaje que nombra la
+causa (el cierre abortivo del canal adjunto y el reset que produce sobre TCP). La comparación vive
+en una función pura y package-private (`Docker.validarTransporte`), en el mismo estilo que
+`versionCompatible` de A40, y se llama desde `Main` **antes** de `Docker.conectar` — a propósito
+no adentro de `conectar`, porque los tests siguen necesitando conectar contra el daemon de prueba,
+que es TCP.
+
+> **Sobre el daemon de prueba y la intermitencia que R5.13 explica.** `DaemonDePrueba` habla TCP
+> (ver su propio javadoc: docker-java resuelve el socket Unix con JNA sólo en Linux/macOS, así que
+> un socket Unix de Java en Windows no le sirve para probar el cliente real). Eso significa que la
+> suite sigue ejercitando, a propósito, el único transporte que R5.13 prohíbe en producción — y es
+> exactamente ahí donde el cierre abortivo puede llegar antes de que el kernel del otro lado
+> termine de entregar los bytes ya escritos, lo que hacía intermitentes bajo carga a
+> `EjecucionTest#elNonceEsDistintoCadaVez` y `EjecucionTest#framingDeTresDocumentos`. La solución no
+> es "arreglar" el cierre (seguiría siendo abortivo: no hay media-clausura en docker-java) sino
+> sacar esa carrera de la medición: `Docker` gana un hook de prueba (`alCerrarAdjunto`, `null` en
+> producción, cero cambio de comportamiento) que corre justo antes de cerrar el canal adjunto, y
+> `DaemonDePrueba` gana `esperarRecepcion(total)`, que cuenta bytes recibidos en el attach a medida
+> que llegan y deja que el test espere la confirmación antes de que el ejecutor cierre. Verificado
+> con un test de estrés temporal (200 KB de tar, 24 hilos quemando CPU, 150 y 300 iteraciones): con
+> el hook, 100% de las recepciones coincidieron con el tamaño esperado; sin él, la misma corrida
+> truncó 96/150. El seam no cambia nada de producción — ahí el transporte ya está restringido por
+> R5.13 a donde la medición no mostró pérdida.
+
 ### 13.8 Cobertura real, incluido lo que falta
 
 | Grupo | Estado |
@@ -850,6 +897,7 @@ entradas malformadas.
 | **A8–A12** — corrupción del stream | ⚠️ **parcial**: R6.2 y R6.5 sin cobertura propia |
 | **A35, A37** — validaciones del catálogo y `perfilHash` | ✅ `CatalogoTest`, 19 tests. La causa R4.1 es inalcanzable con las constantes actuales y se fija como relación, no como excepción |
 | **A40** — verificación de versión del daemon al arrancar | ✅ `DockerVersionTest` (comparación pura + daemon de prueba), y contra Docker real en `ProtocoloIT` |
+| **A41** — rechazo de transporte `tcp://` al arrancar | ✅ `DockerTransporteTest` (comparación pura, sin daemon) |
 | **A2** — golden compartido con Node | ❌ **sin contraparte**: la implementación Node quedó de lado |
 | **A3–A5, A13–A20, A22–A25, A28–A30** | ❌ **fuera del alcance acordado**: son tests de la **imagen**, no del ejecutor. A13–A20 en particular verifican la extracción del tar, que ocurre en `capa1.sh` (I7: el ejecutor no desempaqueta nada) |
 
