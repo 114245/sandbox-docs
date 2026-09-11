@@ -287,7 +287,8 @@ Portar `probar-capa1.sh` a Java. Es mecánico: el script ya demuestra el orden e
 
 - `hostil-paquete` y `hostil-red` dieron `OK` y **no hay línea de base registrada** para ellos:
   nunca habían pasado por el ejecutor, sólo por `run.sh`. Confirmalo con el usuario.
-- `ms-sandbox/imagenes/README.md` todavía describe el modelo de una sola capa.
+- ~~`ms-sandbox/imagenes/README.md` todavía describe el modelo de una sola capa.~~ **hecho**: se
+  reescribió entero para el modelo de dos capas (10-sep-2026).
 - La spec `08-spec-ejecutor.md`, entera, cuando la validación cierre: §3.1, §3.3, §4, §7.2, §11.4,
   §13, §14.
 

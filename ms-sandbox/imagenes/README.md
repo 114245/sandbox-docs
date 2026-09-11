@@ -1,274 +1,264 @@
-> ⚠️ **Desactualizado.** Este documento describe el modelo viejo de **una sola capa**
-> (`entrypoint.sh`, eliminado del repo; ver historial de git). La imagen vigente es la de dos capas
-> (`java21-junit/Dockerfile` + `capa1/capa1.sh` + el catálogo de `../perfiles/`). Pendiente
-> reescribirlo entero para el modelo de dos capas; mientras tanto, el contrato vigente es
-> [`docs/arquitectura/08-spec-ejecutor.md`](../../docs/arquitectura/08-spec-ejecutor.md).
+# `imagenes/` — el contenedor de ejecución
 
-# `java-runner` — contrato del contenedor de ejecución
+Esta carpeta construye la imagen que corre el código de un alumno. En el modelo vigente —**dos
+capas en un solo contenedor**, no dos imágenes: el tag `2.0.0-capa1` es el nombre, no una segunda
+imagen— la imagen aporta el `ENTRYPOINT` (**capa 1**, `capa1/capa1.sh`) y las herramientas de
+`/libs`; **qué** evaluar llega recién en tiempo de ejecución, por `stdin`, como el guion de la
+**capa 2** (lo escribe el Grupo 5 y lo elige el perfil de `../perfiles/`). La capa 1 aísla y no
+sabe evaluar; la capa 2 evalúa y no sabe aislar; el `ejecutor/` no conoce a ninguna de las dos —
+manda bytes por un socket y lee un sobre JSON.
 
-Esta imagen es **el corazón del ms-sandbox**: recibe el código de un alumno y la
-suite del profesor, los corre aislados, y devuelve hechos crudos. No conoce
-desafíos, cursos ni alumnos, y **no decide el veredicto** — eso lo hace el worker
-leyendo el reporte.
-
-Implementa `docs/arquitectura/03-ms-sandbox-ejecucion.md` §1.3 (pasos 3 a 7).
-
----
+El contrato completo, incluida la spec del `create` de Docker, es normativo en
+[`docs/arquitectura/08-spec-ejecutor.md`](../../docs/arquitectura/08-spec-ejecutor.md) — en
+particular **§4.1** (spec del contenedor), **§4.4** (catálogo de perfiles) y **§7** (framing de
+stdin, nonce, separación del reporte). Este documento describe el lado de la imagen y no debe
+contradecir esa spec.
 
 ## Cómo se usa
 
-```sh
-./build.sh                    # construye java-runner:21 (único paso con red)
-./run.sh bundles/ok-suma      # simula lo que hará el worker
+```bash
+# construir la imagen, parado en ms-sandbox/imagenes (contexto = imagenes/, NO imagenes/java21-junit/)
+docker build -f java21-junit/Dockerfile -t sandbox-runner:2.0.0-capa1 .
+
+# probarla a mano, como lo hará el ejecutor real
+cd ../pruebas
+./probar-capa1.sh bundles/ok-suma ../perfiles/java21-junit.sh
 ```
 
-`run.sh` es la traducción ejecutable de §1.3 pasos 3–11: arma el tar, crea el
-contenedor con todos los flags de aislamiento, manda el bundle por `stdin`, hace
-`docker inspect` y destruye. Sirve para probar la imagen **sin nada de Spring**.
+`probar-capa1.sh` arma el `stdin` de tres documentos, crea el contenedor con los mismos flags de
+aislamiento que manda el ejecutor y muestra el sobre. Sirve para probar la imagen sin Java ni
+Spring de por medio — ver «Construir y probar» más abajo para la tabla de los nueve bundles.
 
----
+## El contrato de `stdin`: tres documentos pegados
 
-## Entrada — un tar por `stdin`
-
-No hay `docker cp` ni bind mount. `docker cp` **no funciona** con `--read-only`
-(el demonio rechaza la copia) y además el `tmpfs` de `/tmp` taparía lo copiado.
-Ver §1.5, donde está la tabla de las tres opciones.
+No hay `docker cp` ni bind mount: el contenedor es `--read-only` y `/work` es el único punto
+escribible. Todo entra por un solo `stdin`, en este orden, **sin separadores**, y termina con el
+cierre de la conexión (spec §7, R7.2):
 
 ```
-src/<paquete>/<Clase>.java     ← lo que escribió el ALUMNO
-test/<paquete>/<Clase>Test.java ← lo que escribió el PROFESOR (T05)
+<nonce>\n              32 hex minúscula. Nunca se exporta (R7.3).
+<n>\n                  cuántos BYTES mide el guion de la capa 2, en decimal ASCII
+<guion de n bytes>     el script del perfil, opaco para la capa 1
+<tar>                  el bundle del alumno: "todo lo que quede del stream"
 ```
 
-El `entrypoint` **valida el tar antes de extraerlo**: sin rutas absolutas, sin
-`..`, todo bajo `src/` o `test/`, y al menos un `.java` en `test/`. Es la segunda
-barrera — la API ya validó lo mismo (§2.2), pero ésta es la que ve el tar real.
+El largo va **adelante** y no hay marca de fin porque el guion lo escribe el Grupo 5: es texto
+arbitrario y puede contener cualquier línea, incluida la que se eligiera como separador — mismo
+razonamiento que `Content-Length` en HTTP (R7.9). Se cuenta en bytes, no en caracteres: un acento en
+un comentario del guion mueve el número (R7.11).
 
-## Salida — un sobre JSON por `stdout`
+`capa1.sh` lee el nonce y el largo con `IFS= read -r` (en `dash` consume exactamente hasta el `\n`
+sin tocar el resto del descriptor) y el guion con `dd iflag=fullblock` — el único lector verificado
+que no se pasa de largo: `head -c` sobre BusyBox lee de a bloques de 1024 y descarta el sobrante de
+un pipe, comiéndose la cabecera del tar (medido: guion de 314 B, tar de 10240 B llegando como
+9530 B). Lo que queda del stream después del guion es el tar completo.
 
-Todo lo que imprimen `javac`, JUnit y el código del alumno va a archivos internos.
-**Lo único que se escribe en el `stdout` del contenedor es el sobre**, entre marcas:
+## Qué hace `capa1.sh`, en orden
+
+1. **Nonce** — 32 hex; si no cumple el formato, `BUNDLE_INVALIDO` (22).
+2. **Guion de la capa 2** — largo declarado, numérico, `> 0` y `<= SANDBOX_MAX_SCRIPT_BYTES`
+   (262144 B por defecto); menos bytes de los declarados (`stdin` cortado a mitad, R8.5) también
+   da `BUNDLE_INVALIDO` (22).
+3. **El tar** — se valida *antes* de extraer: rechaza enlaces simbólicos y duros (`tar -tv`, líneas
+   `l`/`h`), rutas absolutas y rutas con `..`. Extrae con `--no-same-owner --no-same-permissions
+   --no-overwrite-dir`. A diferencia del entrypoint viejo, **no** exige que todo cuelgue de
+   `src/`/`test/`: esa estructura es conocimiento de la capa 2, no de la capa 1.
+4. **Contrato de directorios** — exporta `SANDBOX_IN`, `SANDBOX_REPORTS`, `SANDBOX_TMP`,
+   `SANDBOX_STATUS`, `SANDBOX_LIBS` y `SANDBOX_MEM_MB` (memoria del cgroup en MB, o 512 si no se
+   puede leer `/sys/fs/cgroup/memory.max`).
+5. **Invoca la capa 2** con `sh -c "$SCRIPT" </dev/null`, parada en `$SANDBOX_IN`, bajo
+   `timeout -k 5s "${SANDBOX_EVAL_TIMEOUT_S}s"` (backstop, 45 s por defecto). `</dev/null` explícito
+   para que un `read` de la capa 2 no toque el descriptor por el que ya viajó el nonce.
+6. **Barre `/proc`**, cuenta los procesos vivos (excepto PID 1 y `$$`) y los mata con `kill -9` —
+   detección, no prevención (ver «Decisiones no obvias»); lee los avisos opcionales de
+   `$SANDBOX_STATUS/fase` y `/detalle`; y clasifica y emite el sobre por el fd 3, el `stdout` real
+   desviado antes de invocar nada.
+
+## El sobre — schema `sandbox.capa1/v2`
+
+Entre marcas con el nonce, para que el alumno no pueda falsificarlo (R7.4):
 
 ```
-##SANDBOX-RUNNER-V1##
-{ "schema":"sandbox.runner/v1", "fase":"TESTS", "resultado":"OK", ... }
-##FIN-SANDBOX-RUNNER##
+---SANDBOX-<nonce>-INICIO---
+{ "schema":"sandbox.capa1/v2", "resultado":"OK", ... }
+---SANDBOX-<nonce>-FIN---
 ```
 
 | Campo | Qué trae |
 |---|---|
-| `fase` | `BUNDLE` · `COMPILACION_SOLUCION` · `COMPILACION_TESTS` · `TESTS` |
-| `resultado` | Ver la tabla de abajo. **No es el veredicto del alumno** |
-| `exitCodeJava` | El exit code de la JVM de tests, para diagnóstico |
-| `testsEnReporte` | Cuántos tests declara el XML. **Es la guarda contra `System.exit(0)`** |
-| `procesosSobrevivientes` | Procesos que sobrevivieron a la JVM. **Si es > 0, el veredicto no es confiable** |
-| `clasesTest` | Las clases que se le pasaron a JUnit por nombre |
-| `recursos.cpuPruebasMs` | **CPU del alumno.** El número contra el que se evalúa el límite |
-| `recursos.tiempoPruebasMs` | Reloj de pared de la misma fase. Informativo: varía con la carga |
-| `recursos.tiempoCompilacionMs` | Costo de plataforma, no se le cobra al alumno |
-| `reportesTarGzB64` | El directorio de reportes de JUnit, `tar.gz` + base64 |
-| `stdoutB64` / `stderrB64` / `truncado` | Salida capturada, truncada **adentro** del contenedor |
+| `resultado` | Ver la tabla de exit codes abajo. **No es el veredicto del alumno** |
+| `detalle` | Texto libre, escapado y truncado a 512 B |
+| `exitEval` | El exit code con el que salió la capa 2 (o `null` si nunca llegó a correr) |
+| `procesosSobrevivientes` | Procesos vivos después de la capa 2. **Si es > 0, no hay veredicto confiable** |
+| `faseDeclarada` / `detalleDeclarado` | Copia literal de `$SANDBOX_STATUS/fase` y `/detalle` — canal rico y frágil, no confiable si la capa 2 murió de golpe |
+| `recursos.msEval` | Reloj de pared de todo el paso 5 (invocar + esperar la capa 2) |
+| `recursos.cpuEvalMs` | CPU de usuario + sistema de los hijos, de `times` (builtin POSIX) |
+| `reportesTarGzB64` | `$SANDBOX_REPORTS` entero, empaquetado sin mirar adentro, `tar.gz` + base64 |
+| `stdoutB64` / `stderrB64` | Lo que escribió la capa 2 en sus streams reales (fd 1/2, ya redirigidos a archivo), truncado a `SALIDA_LIMITE_BYTES` (65536 B) **adentro** del contenedor |
+| `truncado` | `true` si alguno de los dos streams internos superó ese tope |
 
-### `resultado` y exit code del contenedor
+## Bandas de exit code
 
-| `resultado` | Exit | De quién es la culpa |
+`0` = la capa 2 llegó al final · `20–31` = de la capa 1 (`capa1.sh`) · `32–39` = reservada, sin uso
+hoy (comentario «hueco a propósito») · `40–59` = la capa 2 se frenó a propósito, la define el perfil
+· otro valor = error de infraestructura.
+
+### De la capa 1
+
+| `resultado` | Exit | Causa |
 |---|---|---|
-| `OK` | 0 | Corrió el pipeline y hay reporte. **El veredicto lo decide el worker** |
-| `ERROR_COMPILACION` | 20 | Del alumno: no compila su código |
-| `SUITE_INVALIDA` | 21 | De T05: no compila la suite del profesor |
-| `BUNDLE_INVALIDO` | 22 | De quien armó el bundle (API o worker) |
-| `TIMEOUT_COMPILACION` | 24 | De la plataforma: `javac` no entró en su presupuesto |
-| `LIMITE_MEMORIA` | 25 | Del alumno |
-| `TIMEOUT_CPU` | 26 | Del alumno: agotó su reloj de CPU |
-| `TIMEOUT_PARED` | 27 | Del alumno: durmió en vez de quemar CPU |
-| `SIN_REPORTE` | 28 | Del alumno: la JVM murió sin escribir reporte |
-| `SALIDA_ANTICIPADA` | 29 | Del alumno: hay reporte pero con `tests=0` |
-| `VEREDICTO_NO_CONFIABLE` | 30 | Del alumno: sobrevivió un proceso a la JVM |
-| `MUERTO_POR_SENAL` | 31 | SIGKILL sin agotar la CPU. **El worker desambigua con `OOMKilled`** |
+| `OK` | 0 | La capa 2 corrió y dejó algo en el buzón. **El veredicto lo decide el worker** |
+| `BUNDLE_INVALIDO` | 22 | Nonce, largo de guion o tar mal formados; guion truncado por un cierre a mitad de `stdin` |
+| `EVALUACION_ANOMALA` | 23 | La capa 2 salió con un código fuera de su banda 40-59 (o el `cd` a `$SANDBOX_IN` falló) |
+| `TIMEOUT_PARED` | 27 | Saltó el backstop de la capa 1 (`SANDBOX_EVAL_TIMEOUT_S`) |
+| `SIN_REPORTE` | 28 | La capa 2 salió con 0 pero dejó `$SANDBOX_REPORTS` vacío |
+| `VEREDICTO_NO_CONFIABLE` | 30 | Sobrevivió al menos un proceso a la capa 2: pisa cualquier otra clasificación |
+| `MUERTO_POR_SENAL` | 31 | `SIGKILL` sin que saltara el backstop. Ambiguo con el OOM del cgroup — el worker desambigua con `.State.OOMKilled` |
+| `DETENIDO_POR_EVALUACION` | el mismo que devolvió la capa 2 | La capa 1 **propaga tal cual** el código 40-59; no lo traduce |
 
-> **`OK` no significa que los tests pasaron.** Significa que hay reporte con al
-> menos un test corrido. El veredicto sale del XML de JUnit, **nunca del exit
-> code** (§1.6c).
+> Los códigos `20`/`21`/`24`–`26`/`29` del entrypoint de una sola capa (`ERROR_COMPILACION`,
+> `SUITE_INVALIDA`, `TIMEOUT_COMPILACION`, `LIMITE_MEMORIA`, `TIMEOUT_CPU`, `SALIDA_ANTICIPADA`) ya
+> no existen en la capa 1: compilar, correr JUnit y validar el reporte es conocimiento de
+> evaluación, y ahora vive en la capa 2, banda 40-59.
 
----
+### De la capa 2 (perfil `java21-junit`, banda 40-59)
 
-## Los tres relojes
+Códigos literales de `../perfiles/java21-junit.sh` (idéntico al campo `script` del perfil
+`java21-junit@4.json`):
 
-Se pasan por `-e` y los fija el worker. Son tres, y **solo uno es del alumno**:
+| Código | Fase | Causa |
+|---|---|---|
+| 40 | `COMPILACION` | El bundle no trae fuentes en `src/`, o `javac` de la solución falla |
+| 41 | `COMPILACION_SUITE` | El bundle no trae tests, `javac` de la suite falla, o compiló sin producir ninguna clase |
+| 42 | `COMPILACION` / `COMPILACION_SUITE` | `javac` superó el reloj de plataforma (`TIMEOUT_COMPILE_S`) |
+| 43 | `PRUEBAS` | La JVM se quedó sin memoria (`-XX:+ExitOnOutOfMemoryError`, exit 3) |
+| 44 | `PRUEBAS` | Se agotó el reloj de CPU del alumno (`ulimit -t`, exit 137/152) |
+| 45 | `PRUEBAS` | Backstop de pared agotado — durmió en vez de quemar CPU (exit 124) |
+| 46 | `PRUEBAS` | La JVM terminó sin escribir ningún reporte |
+| 47 | `PRUEBAS` | Hay reporte pero `tests="0"` — la guarda contra `System.exit(0)` |
 
-| Variable | Tipo de reloj | De quién es | Mecanismo |
+## El contrato que debe respetar una capa 2 (para quien escriba un perfil nuevo)
+
+Esto es lo que `capa1.sh` efectivamente exige u ofrece — no una wishlist:
+
+- Recibe el control con `sh -c "$SCRIPT"`, parada en `$SANDBOX_IN`, con `stdin` en `/dev/null`, y
+  puede leer `$SANDBOX_IN`, `$SANDBOX_REPORTS`, `$SANDBOX_TMP`, `$SANDBOX_STATUS`, `$SANDBOX_LIBS`,
+  `$SANDBOX_MEM_MB` — las únicas variables que la capa 1 le exporta a propósito.
+- **Todo lo que quede en `$SANDBOX_REPORTS` cuando termine vuelve en el sobre, y nada más vuelve** —
+  se empaqueta entero y sin mirar el contenido.
+- `$SANDBOX_STATUS/fase` y `/detalle` son opcionales y no confiables: si la capa 2 muere de golpe no
+  llegan. El código de salida es lo único garantizado por el kernel.
+- El código de salida **debe** caer en 40-59 para que la capa 1 lo marque como frenado a propósito
+  (`DETENIDO_POR_EVALUACION`) y lo propague sin traducir. Cualquier otro valor no nulo cae en
+  `EVALUACION_ANOMALA` (23).
+- No debe dar por sentado que el bundle trae `src/`/`test/`: esa convención es propia de este
+  perfil, no del contrato de la capa 1.
+- No puede recuperar el nonce por ningún medio (R7.3, R7.10), aunque el texto del guion sí queda
+  visible en `/proc/1/cmdline` — no importa, la capa 2 ya es código no confiable, igual que el del
+  alumno.
+- No hay forma de proteger el reporte de un proceso que el alumno deja vivo — eso lo detecta la
+  capa 1 después, no la capa 2.
+
+## Los relojes — seis, en dos grupos
+
+| Reloj | Dueño | Valor | Mecanismo |
 |---|---|---|---|
-| `TIMEOUT_COMPILE_MS` | pared | **plataforma** | `timeout` sobre `javac` |
-| `CPU_TESTS_S` | **CPU** | **alumno** | `ulimit -t` → `RLIMIT_CPU` → SIGKILL (137) |
-| `TIMEOUT_TESTS_MS` | pared | backstop | `timeout`, generoso, para el que duerme |
+| Reloj de pared del ejecutor | plataforma | 60 s (`TIMEOUT_EJECUCION_MS`, spec §4.3) | `wait` con timeout + `kill` — la red de última instancia, fuera de esta imagen |
+| Ulimit de CPU del contenedor | techo del perfil | `limites.cpuS` (20 s en `java21-junit@4`) | `--ulimit cpu=<n>:<n>` al crear el contenedor (spec §4.1); lo hace cumplir `Catalogo` al arrancar el ejecutor (R4.1), no en cada ejecución |
+| Backstop de la capa 1 | plataforma | `SANDBOX_EVAL_TIMEOUT_S`, 45 s por defecto (`ENV` del Dockerfile) | `timeout -k 5s` alrededor de toda la capa 2 — **no** es el reloj de la evaluación, es la red de la imagen |
+| Reloj de compilación | plataforma | `TIMEOUT_COMPILE_S` = 8 s (literal en el script del perfil) | `timeout --signal=KILL`, uno por fase de `javac` |
+| Reloj de CPU del alumno | **alumno** | `CPU_TESTS_S` = 10 s (literal en el script del perfil) | `ulimit -t` dentro del subshell que corre JUnit — más estricto que el ulimit del contenedor, nunca puede superarlo |
+| Backstop de pared de los tests | plataforma | `TIMEOUT_TESTS_S` = 25 s (literal en el script del perfil) | `timeout --signal=KILL`, para el que duerme en vez de quemar CPU |
 
-El del alumno se mide en **tiempo de procesador**, no de pared, porque el tiempo
-de CPU es inmune a la contención del host *por construcción*. Es lo que hace
-`isolate` por debajo de Judge0 y Piston. Elimina la causa de los `TIMEOUT`
-intermitentes sobre código correcto en vez de taparla con margen (§1.4d).
+Los tres primeros son de la capa 1 y del ejecutor; los tres últimos son de la capa 2 y viven en el
+perfil (R4.2: «los relojes por fase no deben vivir en el ejecutor»). En `java21-junit.sh` van
+literales porque el script *es* el perfil.
 
----
-
-## Las cuatro decisiones que no son obvias
-
-**1. No hay Maven.** `javac` + `junit-platform-console-standalone.jar` horneado en
-la imagen. Sin red, Maven no descarga nada; aun offline levanta una JVM y tarda
-segundos. El camino directo separa además **tres culpas distintas** en tres pasos
-(§1.6a).
-
-**2. No se escanea el classpath.** No se pasa `--scan-classpath`: los nombres de
-las clases de test se derivan de los `.class` ya compilados y se le dan a JUnit
-con `--select-class`. Ataca directo los 1.2–2.9 s de descubrimiento que midió el
-spike.
-
-> ⚠️ `--select-class` **por sí solo no encuentra nada** — hace falta además
-> `--include-classname='.*'` ([junit-framework#2289](https://github.com/junit-team/junit-framework/issues/2289)).
-> Si algún día parece que la técnica no funciona, es esto.
-
-**3. Los tests van primero en el classpath.** Solución y tests compilan a
-directorios **separados**, y la ejecución usa `--class-path $DIR_TEST:$DIR_SOL`.
-Si el alumno declara una clase que sombrea una de soporte del profesor, gana el
-`.class` del profesor. Es la medida 2 de §1.6d — la misma mitigación que aplicó
-Ares después de un CVSS 8.2.
-
-**4. La JVM se configura contra el cgroup.** `-XX:MaxRAMPercentage=60` (si no, con
-`--memory 256m` el alumno tiene ~64 MB de heap y le explota código correcto) y
-`-XX:+ExitOnOutOfMemoryError`, que hace que el OOM salga con `exitCode 3` en vez
-de degenerar en un `TIMEOUT` (§1.6b).
-
----
-
-## Estado — qué está y qué falta
-
-Construido y corrido contra Docker real (server 29.2.1, imagen 226 MB).
-
-| Pendiente (`00-propuesta` §10) | Estado acá |
-|---|---|
-| 1 — Los tres relojes, el del alumno en CPU | **Verificado**: los tres disparan (`hostil-cpu`, `hostil-sleep`) |
-| 2 — Validar el paquete declarado | **Innecesario en el runner**: lo cubre el orden del classpath. Ver abajo |
-| 3 — El reporte no escribible por el alumno | **No se puede prevenir.** Se detecta. Ver abajo |
-| 4 — Casos hostiles: symlink y hard link | Falta — son ataques a nivel *tar*, no a nivel Java |
-| 5 — No escanear el classpath | **Verificado**: `clasesTest: ["tp.SolucionTest"]` |
-| 7 — Suite de entregas maliciosas en CI | **9 casos, todos contenidos.** Falta el CI |
+**Invariante que hoy se sostiene a mano.** Las fases de la capa 2 corren en serie adentro del
+backstop de la capa 1, así que su peor caso tiene que caber con margen:
 
 ```
-$ ./suite-hostil.sh
-ok-suma                OK    OK                       (sobrevivientes: 0)
-hostil-exit0           OK    SALIDA_ANTICIPADA        (sobrevivientes: 0)
-hostil-reporte         OK    VEREDICTO_NO_CONFIABLE   (sobrevivientes: 6)
-hostil-reporte-loop    OK    VEREDICTO_NO_CONFIABLE   (sobrevivientes: 6)
-hostil-paquete         OK    OK                       (sobrevivientes: 0)
-hostil-red             OK    OK                       (sobrevivientes: 0)
-hostil-cpu             OK    TIMEOUT_CPU              (sobrevivientes: 0)
-hostil-memoria         OK    LIMITE_MEMORIA           (sobrevivientes: 0)
-hostil-sleep           OK    TIMEOUT_PARED            (sobrevivientes: 0)
----
-contenidos: 9   rojos: 0   salteados: 0
+2 × TIMEOUT_COMPILE_S + TIMEOUT_TESTS_S + margen  ≤  SANDBOX_EVAL_TIMEOUT_S
+        8 + 8 + 25 = 41 s   (margen 4 s)          ≤  45 s
+SANDBOX_EVAL_TIMEOUT_S + 5 s de gracia (-k 5s)    <  60 s del ejecutor
 ```
 
-La suite no compara solo el `resultado`: en tres casos **afirma también sobre el
-reporte**, porque el `resultado` solo no distingue contención de suerte.
-`hostil-paquete` tiene que dar `failures="3"` (si diera 0, el sombreado funcionó
-y el veredicto es falso) y `hostil-red` tiene que dar `failures="0"` (si fallara,
-hubo red).
+Si no se cumple, una entrega lenta pero legítima muere por el backstop de la capa 1
+(`TIMEOUT_PARED`, 27) antes de que la capa 2 pueda emitir su código preciso (42 o 45), y se pierde
+el diagnóstico. `java21-junit@3` la violaba (20 + 20 + 30 = 70 s) y se retiró por `@4`. Ningún
+componente la valida: el ejecutor no ve los relojes, que viajan adentro del guion opaco.
 
-### Lo que se midió (3 tests triviales, `--cpus 2`)
+## Decisiones no obvias
 
-| | ok-suma | hostil-exit0 |
-|---|---|---|
-| `tiempoCompilacionMs` (2 × `javac`) | 1825 | 1848 |
-| `tiempoPruebasMs` (pared) | 1112 | 1214 |
-| `cpuPruebasMs` | 2111 | 2233 |
-| `testsEnReporte` | 3 | **0** |
-| `resultado` | `OK` | `SALIDA_ANTICIPADA` |
+- **`/libs` es de `root:root`, `chmod 0555`, y `junit.jar` es `0444`.** Si el alumno pudiera
+  escribir ahí, podría reemplazar el jar del verificador *entre fases*: compilar bien y pisar el jar
+  antes de que corra JUnit. No rompe el aislamiento, pero sí la integridad de la herramienta con la
+  que se dicta el veredicto.
+- **`/work` no se declara en el Dockerfile.** Lo monta el ejecutor como `tmpfs` al crear el
+  contenedor (spec §4.1); `WORKDIR /work` solo hace que el proceso arranque parado ahí.
+- **POSIX `sh`, no bash, en las dos capas.** El `sh` de la imagen (`eclipse-temurin:21-jdk`) es
+  `dash`: nada de arrays ni `mapfile`. El entrypoint viejo declaraba `#!/bin/bash` y usaba ambos —
+  sin la lógica de evaluación adentro, la capa 1 no los necesita.
+- **La detección de sobrevivientes vive en la capa 1, no en la capa 2.** No se puede *prevenir* que
+  un proceso en segundo plano reescriba el reporte — el buzón es un directorio que el alumno mismo
+  escribe y JUnit corre con su uid — pero sí *detectar*: reescribir después de que la capa 2 terminó
+  exige un proceso vivo, y `capa1.sh` barre `/proc` entero (no `pkill -x java`: la capa 1 ni sabe que
+  la capa 2 corrió una JVM).
+- **El nonce nunca se exporta.** Es variable de shell, no de entorno: exportarla la dejaría en
+  `/proc/1/environ`, legible por el alumno y por la capa 2, y el marcador dejaría de ser
+  infalsificable — el único motivo por el que existe (R7.3).
+- **`sh -c "$SCRIPT"`, no `sh archivo`.** `/work` es escribible por el uid 1000, el mismo con el que
+  corre la capa 1 y el alumno (`CapDrop: ALL` impide arrancar como root y bajar privilegios). Un
+  archivo se puede reescribir mientras se lee de a pedazos; `sh -c` lo parsea de memoria antes de
+  ejecutar una línea.
+- **`exec 3>&1` antes de invocar nada.** El `stdout` real queda en el fd 3, y solo `emitir()`
+  escribe ahí — para cuando la capa 2 corre, su `stdout` ya es un archivo, así que ni su propio JSON
+  (que va al buzón, no a `stdout`) ni un `println` del alumno pueden contaminar el sobre.
 
-**Se confirma que el reloj es casi todo toolchain**: el código del alumno corre en
-microsegundos y el pipeline entero tarda ~3 s. Coincide con lo que midió el spike.
+## Los nueve bundles hostiles
 
----
+`probar-capa1.sh` corre cada uno con la spec constante de la §4.1 (mismos flags que el ejecutor
+real: `--network none`, `--read-only`, `--user 1000:1000`, `--cap-drop ALL`, `--tmpfs /work`, etc.);
+con `jq` instalado muestra el sobre parseado y el contenido del buzón. `BundlesIT`
+(`ms-sandbox/ejecutor/src/test/java/sandbox/ejecutor/BundlesIT.java`) corre los mismos nueve
+bundles **a través del ejecutor Java real**, contra `sandbox-runner:2.0.0-capa1` y el catálogo de
+producción (`java21-junit@4`); se saltea si no hay daemon de Docker escuchando.
 
-## Los cinco hallazgos de las primeras corridas
+| Bundle | Qué ataca | `resultado` esperado | `exitEval` | sobrevivientes |
+|---|---|---|---|---|
+| `ok-suma` | Línea de base, sin trampa | `OK` | 0 | 0 |
+| `hostil-exit0` | `System.exit(0)` para dejar un reporte con `tests=0` | `DETENIDO_POR_EVALUACION` (47) | 47 | 0 |
+| `hostil-cpu` | Quema CPU real hasta agotar el reloj del alumno | `DETENIDO_POR_EVALUACION` (44) | 44 | 0 |
+| `hostil-memoria` | Agota el heap de la JVM | `DETENIDO_POR_EVALUACION` (43) | 43 | 0 |
+| `hostil-sleep` | Duerme en vez de quemar CPU, para saltar el `ulimit -t` | `DETENIDO_POR_EVALUACION` (45) | 45 | 0 |
+| `hostil-reporte` | Deja un proceso vivo reescribiendo el reporte | `VEREDICTO_NO_CONFIABLE` (30) | 0 | 6 |
+| `hostil-reporte-loop` | Igual, pero reescribiendo en bucle | `VEREDICTO_NO_CONFIABLE` (30) | 0 | 6 |
+| `hostil-paquete` | Sombrea `tp.Ayuda` (CVE-2024-23682-style) para pisar el soporte del profesor | `OK` — contenido por el orden del classpath | 0 | 0 |
+| `hostil-red` | Intenta una conexión saliente para probar `--network none` | `OK` — la conexión falla y la assertion invertida del bundle pasa | 0 | 0 |
 
-**1. `System.exit(0)` sí deja un reporte escrito, y el doc se quedaba corto.**
-§1.6c dice que la guarda es exigir `tests > 0`, y tiene razón — pero este script
-había implementado *"¿existe el reporte?"*, que **no alcanza**. La entrega hostil
-sale con `exitCode 0`, `OOMKilled: false` y un `TEST-junit-platform-suite.xml`
-perfectamente válido con `tests="0"`. Con la guarda de existencia, aprobaba.
-Ahora se cuentan los tests del XML y el veredicto es `SALIDA_ANTICIPADA`.
+Los valores de esta tabla salen de los asserts de `BundlesIT`, no de una medición propia de este
+documento.
 
-**2. `date +%s%3N` no funciona en esta imagen.** Ubuntu 26.04 —la base de
-`eclipse-temurin:21-jdk`— ya no trae GNU coreutils sino **uutils** (la
-reimplementación en Rust), y su `date` **ignora el ancho** en `%3N`: devuelve los
-9 dígitos de nanosegundos igual. Los tiempos salían como `2334953266 ms` para una
-compilación de 2.3 s. Se pide `%N` y se divide. `stat -c%s`, `timeout`,
-`base64 -w0` y `find -printf` sí se comportan como GNU.
+## Cómo agregar una imagen nueva (otro lenguaje o runtime)
 
-**3. `RLIMIT_CPU` sale con 137, no con 152.** §1.4d dice que al agotarse el reloj
-de CPU el kernel manda SIGXCPU (exit 152). En la práctica la JVM sale con **137**
-(SIGKILL): `ulimit -t` deja el soft y el hard limit iguales, así que las dos
-señales llegan juntas y gana la segunda. Importa porque **137 es ambiguo** — es
-también el OOM-kill del cgroup. Lo que desambigua no es el exit code sino la CPU
-medida: si se consumió el presupuesto entero, fue el reloj del alumno. Si no,
-el runner devuelve `MUERTO_POR_SENAL` y deja que el worker decida con
-`.State.OOMKilled`. Es el mismo razonamiento por el que el veredicto sale del
-reporte y no del exit code.
+1. `imagenes/<perfil>/Dockerfile`, con contexto de build `imagenes/` (no el subdirectorio):
+   `COPY capa1/capa1.sh /opt/sandbox/capa1.sh` (la misma capa 1, sin cambios); un toolchain propio
+   en un directorio dedicado (equivalente a `/libs`), de solo lectura para `1000:1000`; `ENV
+   SANDBOX_LIBS=<ruta>` y, si difieren de los defaults, `SANDBOX_EVAL_TIMEOUT_S` /
+   `SANDBOX_MAX_SCRIPT_BYTES` / `SALIDA_LIMITE_BYTES`; `USER 1000:1000`; `WORKDIR /work`;
+   `ENTRYPOINT ["/opt/sandbox/capa1.sh"]`.
+2. Un script de capa 2 nuevo en `../perfiles/` que respete el contrato de arriba y salga siempre en
+   la banda 40-59.
+3. Un perfil `<perfilId>@<version>.json` en `../perfiles/` (spec §4.4) que apunte al tag nuevo y
+   copie el script byte a byte en el campo `script`.
+4. Tres acoplamientos **manuales**, sin validación automática que los una (ver
+   `../README.md#acoplamientos-manuales--no-hay-validación-automática-que-los-una`): el
+   `Constantes.ENTRYPOINT` del ejecutor debe seguir coincidiendo con el `ENTRYPOINT` del Dockerfile;
+   `SANDBOX_MAX_SCRIPT_BYTES` de la imagen debe ser `>=` el `MAX_SCRIPT_BYTES` que el ejecutor le
+   exige al catálogo (R4.5); y el campo `script` del perfil tiene que seguir siendo el `.sh` byte a
+   byte cada vez que se lo edite.
 
-**4. La memoria se comporta exactamente como predijo §1.6b.** `hostil-memoria`
-sale con `exitCode 3` y **`OOMKilled: false`**. Queda confirmado que decidir con
-ese flag solo clasificaría una fuga de memoria como error interno del sandbox —
-y el alumno tendría intentos infinitos.
+## Pendiente
 
-**5. `cpuPruebasMs` es ~2× el reloj de pared, y eso cambia el dimensionamiento.**
-1112 ms de pared contra 2111 ms de CPU, porque **el tiempo de CPU se suma entre
-threads** y la JVM arranca con varios. La consecuencia práctica no es cosmética:
-con `CPU_TESTS_S=10`, el arranque de la JVM ya se come ~2 s del presupuesto **del
-alumno** antes de que corra una línea suya. §1.4a decidió que compilar es costo de
-plataforma; **el arranque de la JVM también lo es, y hoy se le está cobrando al
-alumno.** Hay que decidirlo explícitamente y decírselo a T05 (definición 11).
-
-### Pendiente 3 — el reporte no se puede proteger, se puede detectar
-
-Éste es el hallazgo más importante de la sesión, y **contradice lo que este mismo
-README decía antes**.
-
-La idea original era: matar los procesos sobrevivientes antes de leer el reporte,
-y con eso se cierra la ventana. `hostil-reporte-loop` demuestra que **no**. Un
-atacante que reescribe el reporte *en bucle* gana siempre, porque **matarlo
-después no deshace la escritura que ya hizo**. La corrida sin la defensa nueva
-devolvía un `TEST-forjado.xml` con `failures="0"` como único archivo: el alumno
-se escribió la nota.
-
-Y el problema es estructural, no de implementación: el reporte vive en `/tmp`,
-`/tmp` lo escribe el alumno, y **JUnit corre con el uid del alumno**. El archivo
-está dentro de su dominio de confianza y no hay flag de Docker que lo saque de
-ahí. Un segundo `tmpfs` con otro uid tampoco alcanza, porque el que tiene que
-escribir el reporte es JUnit — o sea, el alumno.
-
-> Es el mismo límite que §1.6d ya había encontrado para Ares: **el contenedor
-> protege el host, no protege el veredicto.** La conclusión nueva es que el
-> reporte-como-archivo es parte del veredicto, y hereda ese límite.
-
-Lo que sí se puede es **detectar**: para reescribir el reporte *después* de que
-JUnit lo escribió, el atacante necesita un proceso vivo. El runner cuenta los que
-sobrevivieron a la JVM (`procesosSobrevivientes`) y si hay alguno el resultado es
-`VEREDICTO_NO_CONFIABLE` — nunca éxito. Un ataque que insiste se detecta siempre;
-uno que escribe una sola vez a ciegas tiene que acertarle a una ventana de
-milisegundos sin saber cuándo termina JUnit.
-
-Dos detalles de implementación que salieron de la misma prueba:
-
-- El barrido original era `pkill -x java`, y **el proceso del ataque es un `sh`**:
-  no matcheaba. Ahora se barre por `/proc`, sin filtrar por nombre.
-- El `stdout` del contenedor (fd 3, por donde sale el sobre) **lo heredaban los
-  hijos del alumno**, que podían escribir un sobre falso. Se cierra con `3>&-`
-  antes de lanzar la JVM.
-
-### Pendiente 2 — el orden del classpath ya lo cubre
-
-`hostil-paquete` reproduce CVE-2024-23682: el alumno declara `tp.Ayuda` —una clase
-de soporte del profesor— para que el test se compare contra su respuesta. **Queda
-contenido por el orden del classpath** (`$DIR_TEST:$DIR_SOL`), sin necesidad de
-validar paquetes: el reporte da `failures="3"`.
-
-Validar el paquete declarado en la API sigue siendo deseable como defensa en
-profundidad y para dar un `400` temprano con `PAQUETE_RESERVADO`, pero **ya no es
-lo único que separa el veredicto de ser falso**.
+- **`java21-junit/Dockerfile`**: el `sha256` de `junit.jar` no está fijado ni verificado — se confía
+  en Maven Central sobre TLS (`TODO(seguridad)` explícito en el propio Dockerfile).
