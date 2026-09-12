@@ -7,4 +7,5 @@ package sandbox.worker;
  */
 final class ErrorDeProgramacion extends RuntimeException {
     ErrorDeProgramacion(String mensaje) { super(mensaje); }
+    ErrorDeProgramacion(String mensaje, Throwable causa) { super(mensaje, causa); }
 }

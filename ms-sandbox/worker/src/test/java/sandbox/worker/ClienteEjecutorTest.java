@@ -100,6 +100,30 @@ class ClienteEjecutorTest {
     }
 
     @Test
+    void un200QueNoParseaEsErrorDeEjecutor(@TempDir Path dir) throws Exception {
+        Path socket = socketEn(dir);
+        try (EjecutorDePrueba ignorado = EjecutorDePrueba.queResponde(
+                socket, EjecutorDePrueba.respuesta200Cruda("{esto no es json"))) {
+
+            assertThrows(ErrorDeEjecutor.class,
+                    () -> new ClienteEjecutor(socket).ejecutar(ID, "java21-junit@4", TAR));
+        }
+    }
+
+    @Test
+    void un200CuyoCuerpoEsElLiteralNullEsErrorDeEjecutor(@TempDir Path dir) throws Exception {
+        // `null` parsea BIEN y devuelve un Sobre null: sin la guarda, el null se propaga hasta
+        // el veredicto y revienta lejos de aca.
+        Path socket = socketEn(dir);
+        try (EjecutorDePrueba ignorado = EjecutorDePrueba.queResponde(
+                socket, EjecutorDePrueba.respuesta200Cruda("null"))) {
+
+            assertThrows(ErrorDeEjecutor.class,
+                    () -> new ClienteEjecutor(socket).ejecutar(ID, "java21-junit@4", TAR));
+        }
+    }
+
+    @Test
     void elTopeDeProduccionEsMayorQueElDelEjecutor() {
         // 04 seccion 12, la escalera de relojes: 60 s ejecutor < 75 s cliente. Nunca iguales.
         assertTrue(Constantes.TIMEOUT_CLIENTE_MS > 60_000);

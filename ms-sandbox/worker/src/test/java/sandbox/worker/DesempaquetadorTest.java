@@ -49,6 +49,18 @@ class DesempaquetadorTest {
     }
 
     @Test
+    void unSobreQueEsElLiteralNullTiraErrorDeSobre() {
+        // `null` es JSON valido: readValue devuelve null SIN excepcion, asi que el catch no
+        // dispara y el null sale a reventar aguas abajo.
+        assertThrows(ErrorDeSobre.class, () -> Desempaquetador.leerSobre("null"));
+    }
+
+    @Test
+    void unSobreQueNoParseaTiraErrorDeSobre() {
+        assertThrows(ErrorDeSobre.class, () -> Desempaquetador.leerSobre("{esto no es json"));
+    }
+
+    @Test
     void desempaquetaElBuzonConservandoNombresYContenido() throws Exception {
         SobreCapa1 sobre = sobreCon(tarGzB64(
             "./TEST-a.xml", "<testsuite tests=\"1\"/>",

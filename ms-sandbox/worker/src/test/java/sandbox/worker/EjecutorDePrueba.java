@@ -50,6 +50,12 @@ final class EjecutorDePrueba implements AutoCloseable {
                 + cuerpo.getBytes(StandardCharsets.UTF_8).length + "\r\n\r\n" + cuerpo;
     }
 
+    /** Respuesta 200 con el cuerpo TAL CUAL: para probar cuerpos que no son un sobre. */
+    static String respuesta200Cruda(String cuerpo) {
+        return "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: "
+                + cuerpo.getBytes(StandardCharsets.UTF_8).length + "\r\n\r\n" + cuerpo;
+    }
+
     static String respuestaSinCuerpo(int codigo, String razon, String headersExtra) {
         return "HTTP/1.1 " + codigo + " " + razon + "\r\n" + headersExtra + "Content-Length: 0\r\n\r\n";
     }

@@ -19,6 +19,10 @@ final class Juez {
             case "OK"                      -> juzgarCorridaCompleta(evidencia);
             case "DETENIDO_POR_EVALUACION" -> juzgarFrenoDeLaCapa2(capa1, evidencia);
             case "TIMEOUT_PARED"           -> Fallo.delAlumno(Veredicto.TIMEOUT);
+            // PROVISIONAL: el `false` de consumeIntento es el valor que D7 todavia no cerro
+            // ("VEREDICTO_NO_CONFIABLE, con vida o sin vida", diseno seccion 9, se define con
+            // T10). Esta marcado aca para que el dia que D7 cierre se sepa donde tocar: es esta
+            // linea y nada mas.
             case "VEREDICTO_NO_CONFIABLE"  -> new Fallo(Veredicto.VEREDICTO_NO_CONFIABLE, false);
             case "MUERTO_POR_SENAL"        -> oomKilled
                                                   ? Fallo.delAlumno(Veredicto.LIMITE_MEMORIA)
@@ -26,6 +30,9 @@ final class Juez {
             case "SIN_REPORTE",
                  "BUNDLE_INVALIDO",
                  "EVALUACION_ANOMALA"      -> Fallo.interno();
+            // Jackson deja el campo en null si falta, y un switch sobre String null tira NPE
+            // antes de llegar al default. El resto del modulo tolera sobres no contractuales.
+            case null                      -> Fallo.interno();
             // Un resultado que no conocemos es un despliegue desalineado, no una entrega mala.
             default                        -> Fallo.interno();
         };

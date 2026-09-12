@@ -40,7 +40,9 @@ final class Empaquetador {
                 tar.closeArchiveEntry();
             }
         } catch (Exception e) {
-            throw new ErrorDeProgramacion("no se pudo empaquetar el bundle de " + raiz + ": " + e);
+            // La causa va como causa y no concatenada al mensaje: concatenarla pierde el
+            // stack trace, que es justo lo que hace falta para un bug nuestro.
+            throw new ErrorDeProgramacion("no se pudo empaquetar el bundle de " + raiz, e);
         }
         return crudo.toByteArray();
     }

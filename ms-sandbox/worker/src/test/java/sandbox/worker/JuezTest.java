@@ -117,6 +117,17 @@ class JuezTest {
     }
 
     @Test
+    void unResultadoNuloDeLaCapa1EsInternoYNoRevienta() {
+        // Jackson deja el campo en null si el sobre de la capa 1 no lo trae, y un switch sobre
+        // String null tira NPE antes de llegar al default. El resto del modulo ya tolera
+        // sobres no contractuales: este era el unico punto asimetrico.
+        Fallo fallo = Juez.juzgar(capa1(null, 0), false, evidencia(3, 0));
+
+        assertEquals(Veredicto.ERROR_INTERNO, fallo.veredicto());
+        assertFalse(fallo.consumeIntento());
+    }
+
+    @Test
     void elConteoDeLosXmlLeGanaAlExitEval47DeLaCapa2() {
         // 47 es la capa 2 declarando tests=0 por su cuenta. Es la Opcion B que 12-d16
         // seccion 3 descarta: el vigilado vigilandose. Si el conteo real dice que corrieron

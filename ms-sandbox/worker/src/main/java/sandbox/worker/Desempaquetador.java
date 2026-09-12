@@ -19,11 +19,16 @@ final class Desempaquetador {
 
     static SobreCapa1 leerSobre(String json) {
         if (json == null || json.isBlank()) throw new ErrorDeSobre("el reporte vino vacio");
+        SobreCapa1 sobre;
         try {
-            return MAPPER.readValue(json, SobreCapa1.class);
+            sobre = MAPPER.readValue(json, SobreCapa1.class);
         } catch (Exception e) {
             throw new ErrorDeSobre("el sobre de la capa 1 no se pudo parsear", e);
         }
+        // El literal `null` parsea BIEN y devuelve null, sin excepcion: el catch no dispara y
+        // el null sale de aca para reventar aguas abajo. Un sobre nulo no es un sobre.
+        if (sobre == null) throw new ErrorDeSobre("el sobre de la capa 1 es el literal null");
+        return sobre;
     }
 
     /**

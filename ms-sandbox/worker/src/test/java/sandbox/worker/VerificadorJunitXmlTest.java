@@ -113,6 +113,30 @@ class VerificadorJunitXmlTest {
     }
 
     @Test
+    void conRaizTestsuitesSumaSoloLosHijosDirectosYNoElAgregadoDelWrapper() {
+        // Los nueve tests que ya habia usan raiz <testsuite>: esta rama no la cubria nadie.
+        //
+        // El XML esta armado para que DUELA contar descendientes: el wrapper declara los
+        // totales agregados de sus hijos, y la suite "b" declara los de su suite anidada. Por
+        // hijos DIRECTOS del wrapper da 4 corridas y 2 fallidas; por descendientes daria 7 y 3,
+        // porque "b" y "b.interna" son la misma corrida contada dos veces.
+        String envoltorio =
+              "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+            + "<testsuites name=\"todo\" tests=\"4\" failures=\"1\" errors=\"1\" skipped=\"0\">"
+            + "<testsuite name=\"a\" tests=\"1\" failures=\"1\" errors=\"0\" skipped=\"0\"/>"
+            + "<testsuite name=\"b\" tests=\"3\" failures=\"0\" errors=\"1\" skipped=\"0\">"
+            + "<testsuite name=\"b.interna\" tests=\"3\" failures=\"0\" errors=\"1\" skipped=\"0\"/>"
+            + "</testsuite>"
+            + "</testsuites>";
+
+        Evidencia evidencia = verificador.verificar(buzonCon("./TEST-todo.xml", envoltorio));
+
+        assertTrue(evidencia.legible());
+        assertEquals(4, evidencia.corridas());
+        assertEquals(2, evidencia.fallidas());
+    }
+
+    @Test
     void soportaJunitXmlYNadaMas() {
         assertTrue(verificador.soporta("junit-xml"));
         assertFalse(verificador.soporta("pmd-xml"));

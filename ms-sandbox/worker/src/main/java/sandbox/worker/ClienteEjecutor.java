@@ -79,6 +79,11 @@ final class ClienteEjecutor {
             } catch (TimeoutException e) {
                 cerrarCallado(canal);
                 throw new ErrorDeEjecutor("el ejecutor no respondio en " + topeMs + " ms", e);
+            } catch (InterruptedException e) {
+                // Tragarse la interrupcion deja al hilo sin la senal de apagado. Va a importar
+                // cuando el worker corra bajo un consumidor de cola con apagado ordenado.
+                Thread.currentThread().interrupt();
+                throw new ErrorDeEjecutor("la espera de la respuesta fue interrumpida", e);
             } catch (Exception e) {
                 Throwable causa = e.getCause() != null ? e.getCause() : e;
                 if (causa instanceof EjecutorSaturado s) throw s;
@@ -106,11 +111,16 @@ final class ClienteEjecutor {
             default -> throw new ErrorDeEjecutor("el ejecutor respondio " + codigo);
         }
 
+        Sobre sobre;
         try {
-            return MAPPER.readValue(cuerpo, Sobre.class);
+            sobre = MAPPER.readValue(cuerpo, Sobre.class);
         } catch (Exception e) {
             throw new ErrorDeEjecutor("la respuesta del ejecutor no se pudo parsear", e);
         }
+        // Un cuerpo 200 cuyo contenido sea el literal `null` parsea sin excepcion y devuelve
+        // null. Devolverlo seria propagar un NPE hasta el veredicto.
+        if (sobre == null) throw new ErrorDeEjecutor("el ejecutor respondio 200 con un sobre nulo");
+        return sobre;
     }
 
     private static long segundosDe(String retryAfter) {
