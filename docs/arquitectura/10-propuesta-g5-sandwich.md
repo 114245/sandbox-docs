@@ -9,7 +9,7 @@
 >
 > **Estado (8‑sep‑2026): ya se contestó.** Esto dejó de estar en construcción. El Grupo 5 mandó su
 > **V4** —que llegó por su cuenta al mismo diseño de dos capas, sin haber leído nada de esto— y le
-> contestamos con [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md),
+> contestamos con [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../historico/intercambios-g5/Respuesta_G8_a_Propuesta_V4.md),
 > donde aceptamos el modelo y elegimos la Opción 1.
 >
 > **Este archivo queda como la versión larga y divulgativa**, con el glosario, los cuatro tipos de

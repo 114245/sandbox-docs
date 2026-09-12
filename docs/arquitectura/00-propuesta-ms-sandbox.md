@@ -224,7 +224,7 @@ Son dos cosas distintas, y la segunda no la cierra ningún flag de Docker. Ejemp
 
 Se cierra con tres medidas baratas, todas del lado nuestro: validar el paquete que declara el alumno, compilar en directorios separados poniendo los tests primero, y asegurar que el reporte se escriba donde el alumno no pueda tocarlo.
 
-📄 *Detalle: [`03`](./03-ms-sandbox-ejecucion.md) §1.6d · [`hallazgos-investigacion-sandbox.md`](../../hallazgos-investigacion-sandbox.md) §9*
+📄 *Detalle: [`03`](./03-ms-sandbox-ejecucion.md) §1.6d · [`hallazgos-investigacion-sandbox.md`](../../historico/investigacion/hallazgos-investigacion-sandbox.md) §9*
 
 ---
 
@@ -342,7 +342,7 @@ Según el criterio de la cátedra, *"evaluamos X y lo descartamos porque Y"* val
 
 Y una que **no** descartamos pero conviene explicar, porque un tribunal que conozca el tema la va a preguntar: **ni Judge0 ni Piston levantan un contenedor por ejecución** — usan un sandbox más liviano *dentro* de Docker, porque a escala de miles de ejecuciones por hora el nuestro no cerraría. A 120 usuarios y 4–6 ejecuciones en paralelo, medimos que sí cierra. **La misma decisión a escala de LeetCode sería equivocada**, y decirlo con esa condición de validez explícita es el punto.
 
-📄 *Detalle: [`hallazgos-investigacion-sandbox.md`](../../hallazgos-investigacion-sandbox.md) — la investigación completa, con fuentes*
+📄 *Detalle: [`hallazgos-investigacion-sandbox.md`](../../historico/investigacion/hallazgos-investigacion-sandbox.md) — la investigación completa, con fuentes*
 
 ---
 
@@ -430,4 +430,4 @@ De ahí se derivan, y no al revés, tres decisiones que parecen independientes:
 | [`03-ms-sandbox-ejecucion.md`](./03-ms-sandbox-ejecucion.md) | Aislamiento, lo medido, los tropiezos de Java, máquina de estados, contrato de API completo |
 | [`04-ms-sandbox-worker.md`](./04-ms-sandbox-worker.md) | El worker: por qué existe, la cola, el outbox, la DLQ, el janitor, concurrencia, métricas y pruebas |
 | [`05-ms-sandbox-patrones.md`](./05-ms-sandbox-patrones.md) | Los patrones de la unidad, uno por uno, aplicados y descartados |
-| [`../../hallazgos-investigacion-sandbox.md`](../../hallazgos-investigacion-sandbox.md) | La investigación externa completa, con fuentes citables — **y un glosario del vocabulario técnico** |
+| [`../../historico/investigacion/hallazgos-investigacion-sandbox.md`](../../historico/investigacion/hallazgos-investigacion-sandbox.md) | La investigación externa completa, con fuentes citables — **y un glosario del vocabulario técnico** |

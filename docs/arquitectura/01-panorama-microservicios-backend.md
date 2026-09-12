@@ -4,7 +4,7 @@
 > Plataforma de Aprendizaje Gamificado
 > Documento de análisis. No contiene decisiones de implementación cerradas.
 
-**Fuentes:** [`../_fuentes/TUP_PIV_BE_PROPUESTA_ARQ.md`](../_fuentes/TUP_PIV_BE_PROPUESTA_ARQ.md) (propuesta de arquitectura de la cátedra: reglas de plataforma y reparto de propiedad), `PRD-Plataforma-Gamificada-TP.md` (definición funcional), `temas_curso.md` (asignación de temas).
+**Fuentes:** [`../../historico/fuentes/TUP_PIV_BE_PROPUESTA_ARQ.md`](../../historico/fuentes/TUP_PIV_BE_PROPUESTA_ARQ.md) (propuesta de arquitectura de la cátedra: reglas de plataforma y reparto de propiedad), `PRD-Plataforma-Gamificada-TP.md` (definición funcional), `temas_curso.md` (asignación de temas).
 **Alcance:** solo backend. El frontend (Angular 21+) requiere un análisis separado.
 **Grupo del autor:** Tema 06 — Sandbox / Runtime. Ver [`03-ms-sandbox-ejecucion.md`](./03-ms-sandbox-ejecucion.md).
 

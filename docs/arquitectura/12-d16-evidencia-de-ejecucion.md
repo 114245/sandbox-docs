@@ -407,6 +407,6 @@ todavía debe implementar la verificación fina y el comportamiento *fail-closed
 
 - [`04-ms-sandbox-worker.md`](./04-ms-sandbox-worker.md) §6 — el mapeo de veredictos y la guarda que ya existe.
 - [`08-spec-ejecutor.md`](./08-spec-ejecutor.md) §5 — el sobre, que cambia de campos.
-- [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) §4.6 y §4.7 — `reportFormat` y el smoke test, tal como se los planteamos al Grupo 5.
+- [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../historico/intercambios-g5/Respuesta_G8_a_Propuesta_V4.md) §4.6 y §4.7 — `reportFormat` y el smoke test, tal como se los planteamos al Grupo 5.
 - `entrypoint.sh` (de una sola capa, eliminado del repo; ver historial de git) líneas 419‑456 — las cinco guardas del §2.
 - [`README.md`](./README.md) — estado de decisiones.

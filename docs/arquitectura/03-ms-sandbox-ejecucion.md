@@ -24,7 +24,7 @@
 > | **§7** definiciones abiertas | Las **1, 2, 4, 5, 6, 14, 16 y 17** dejan de ser negociaciones nuestras: caen en dominio de T05 |
 >
 > **Dónde está lo vigente mientras tanto:**
-> [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) §2 contiene el
+> [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../historico/intercambios-g5/Respuesta_G8_a_Propuesta_V4.md) §2 contiene el
 > contrato del contenedor completo.
 >
 > **Por qué no está reescrito ya.** Porque la respuesta al V4 está mandada y sin contestar:
@@ -38,7 +38,7 @@
 | Grupo con el que se coordina | **Tema 05 — Desafíos Prácticos** |
 | Arquitectura de plataforma | Definida por la cátedra: gateway como única entrada, sin comunicación directa entre servicios, base por servicio, bus para lo asincrónico. Ver [`01-panorama-microservicios-backend.md`](./01-panorama-microservicios-backend.md) §1 |
 | Núcleo de ejecución | **Verificado contra Docker real** con 10 entregas de prueba. Lo medido está en §1.4 |
-| Investigación externa | Incorporada. Los cambios que trajo están marcados con **[IE]** y detallados en [`hallazgos-investigacion-sandbox.md`](../../hallazgos-investigacion-sandbox.md) |
+| Investigación externa | Incorporada. Los cambios que trajo están marcados con **[IE]** y detallados en [`hallazgos-investigacion-sandbox.md`](../../historico/investigacion/hallazgos-investigacion-sandbox.md) |
 
 > **Nota sobre las marcas [IE].** Los puntos marcados así cambiaron por la investigación de fuentes
 > externas (CVEs reales de Judge0 y Ares, papers, documentación oficial). El hallazgo transversal:
@@ -645,7 +645,7 @@ Y el reintento tiene tope: al agotarlo, el mensaje va a la **DLQ** y la fila que
 > **⚠ Este contrato está superado por el V4.** El request pierde `lenguaje`, `archivos[].rol`,
 > `archivos[].visibilidad`, `modo` y `trazabilidad.suiteVersion`; la respuesta de §6.2 se cae
 > entera, porque dejamos de parsear el reporte. El contrato del contenedor está en
-> [`Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) §2. **Se reescribe
+> [`Respuesta_G8_a_Propuesta_V4.md`](../../historico/intercambios-g5/Respuesta_G8_a_Propuesta_V4.md) §2. **Se reescribe
 > cuando G5 conteste, no antes.**
 
 Prefijo: `/api/v1/sandbox`

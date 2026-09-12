@@ -5,7 +5,7 @@
 
 **Origen:** transcripción a Markdown de `TUP_PIV_BE_PROPUESTA_ARQ.pdf` (16 páginas), documento de la cátedra.
 **Fidelidad:** el texto es transcripción literal. Las siete láminas de la §4 se conservan como imagen (`img/lamina-*.jpeg`, extraídas sin recompresión del PDF) y además se transcriben a Mermaid y a listas. Los diagramas Mermaid son **reinterpretación**, no original: ante cualquier duda vale la imagen.
-**Documento derivado:** ver [`../arquitectura/01-panorama-microservicios-backend.md`](../arquitectura/01-panorama-microservicios-backend.md).
+**Documento derivado:** ver [`../arquitectura/01-panorama-microservicios-backend.md`](../../docs/arquitectura/01-panorama-microservicios-backend.md).
 
 > [!IMPORTANT]
 > La cátedra declara este documento como **propuesta inicial**, no como especificación cerrada, y aclara que fue elaborado con asistencia de IA, por lo que puede contener imprecisiones. Ver [Aclaración final](#aclaración-final).

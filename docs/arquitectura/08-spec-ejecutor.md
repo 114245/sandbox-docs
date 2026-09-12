@@ -26,7 +26,7 @@
 > | **§7** validación del tar | **No la escribe esta spec, y ahora se sabe por qué**: el ejecutor no desempaqueta nada (I7). La regla por tipo de entrada —sin `..`, sin barra inicial, sin enlaces simbólicos ni duros— vive en `capa1.sh`, que es quien extrae. Lo que sí entró acá es el **framing de tres documentos** que hizo falta para que la capa 1 exista (C9) (**P2**) |
 > | **§13** aceptación | Actualizada entera en C12. Los casos de symlink y hardlink siguen siendo de la suite de la imagen, no de la del ejecutor |
 >
-> Ver [`Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) §2.4.
+> Ver [`Respuesta_G8_a_Propuesta_V4.md`](../../historico/intercambios-g5/Respuesta_G8_a_Propuesta_V4.md) §2.4.
 
 > **Estado actual.** La implementación vigente es Java 21 y está alineada con los cambios de esta sección.
 

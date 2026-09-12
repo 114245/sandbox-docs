@@ -13,7 +13,7 @@
 > ### ⚠ El V4 mueve el piso de varios documentos
 >
 > El 7‑sep‑2026 llegó `Propuesta_Integracion_G5_G6_Entrypoint_V4.pdf` y le contestamos con
-> [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md), donde
+> [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../historico/intercambios-g5/Respuesta_G8_a_Propuesta_V4.md), donde
 > **aceptamos el modelo de dos capas y elegimos la Opción 1** (catálogo de perfiles). Eso corre la
 > frontera de dominio: dejamos de ser *corredor de Java con opinión* y pasamos a ser
 > **infraestructura agnóstica de lenguaje**.
@@ -42,7 +42,7 @@
 | **Entender cómo se hablan el worker y el ejecutor, sin dar nada por sabido** | [`09-worker-ejecutor-explicado.md`](./09-worker-ejecutor-explicado.md) |
 | **Entender dónde se verifica que hubo ejecución de verdad (D16)** | [`12-d16-evidencia-de-ejecucion.md`](./12-d16-evidencia-de-ejecucion.md) |
 | Ver el sándwich contado largo, con glosario y los cuatro tipos de desafío | [`10-propuesta-g5-sandwich.md`](./10-propuesta-g5-sandwich.md) |
-| Leer lo que efectivamente se le mandó al Grupo 5 | [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../otros/Respuesta_G8_a_Propuesta_V4.md) |
+| Leer lo que efectivamente se le mandó al Grupo 5 | [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../historico/intercambios-g5/Respuesta_G8_a_Propuesta_V4.md) |
 
 ---
 
@@ -174,13 +174,13 @@ veredicto de ser falso), los tres relojes y el ulimit `cpu` (fijados en `08` §4
 | `ms-sandbox/perfiles/` | El catálogo de perfiles: `java21-junit@4.json` y el script de la capa 2 que referencia, `java21-junit.sh` |
 | `ms-sandbox/pruebas/` | El banco de pruebas: `bundles/` (los nueve casos, camino feliz y hostiles) y `probar-capa1.sh`, el arnés de dos capas |
 | `ms-sandbox/ejecutor/` | Implementación vigente del ejecutor en Java 21. **~1066 líneas** efectivas y **122 tests en verde**. Verificada contra Docker real por `npipe://` en Windows y `unix://` en Linux |
-| `hallazgos-investigacion-sandbox.md` | Investigación externa sobre el sandbox: CVEs de Judge0 y Ares, papers, fuentes. Lo que trajo está marcado **[IE]** en los documentos |
-| `docs/respuesta-sidecar-ejecutor.md` | Respuesta a la investigación del **ejecutor**: el rediseño que elimina el `attach` hijacked, y tres correcciones al briefing |
-| `docs/briefing-investigacion-*.md` | Los dos briefings autocontenidos que se llevaron a fuentes externas |
-| `otros/Contrato_Sandbox_Tema05.md` | **⚠ OBSOLETO.** El primer borrador del contrato con T05: Python 3.11, `source_code` único y `test_cases[]` con `expected_stdout`. Nada de eso sobrevive al V4. Sobrevive sólo el **modelo asincrónico** y la distinción `infra_error` vs. falla del alumno. Lo reemplaza `otros/Respuesta_G8_a_Propuesta_V4.md` §2 y §6 |
-| `otros/Respuesta_G8_a_Propuesta_V4.md` | **La respuesta que le mandamos al Grupo 5** el 7‑sep‑2026: aceptamos el modelo de dos capas y la Opción 1, y les pasamos la mitad del contrato del contenedor que no conocían (buzón de salida, códigos de salida, desvío de `stdout`, qué hace la capa 1 después). Tiene también su PDF |
-| `Propuesta_Integracion_G5_G6_Entrypoint_V4.pdf` | Lo que mandó el Grupo 5 |
-| `docs/_fuentes/` | Propuesta de la cátedra, láminas, y las versiones de los documentos previas a la investigación |
+| `historico/investigacion/hallazgos-investigacion-sandbox.md` | Investigación externa sobre el sandbox: CVEs de Judge0 y Ares, papers, fuentes. Lo que trajo está marcado **[IE]** en los documentos |
+| `historico/investigacion/respuesta-sidecar-ejecutor.md` | Respuesta a la investigación del **ejecutor**: el rediseño que elimina el `attach` hijacked, y tres correcciones al briefing |
+| `historico/investigacion/briefing-investigacion-*.md` | Los dos briefings autocontenidos que se llevaron a fuentes externas |
+| `historico/intercambios-g5/Contrato_Sandbox_Tema05.md` | **⚠ OBSOLETO.** El primer borrador del contrato con T05: Python 3.11, `source_code` único y `test_cases[]` con `expected_stdout`. Nada de eso sobrevive al V4. Sobrevive sólo el **modelo asincrónico** y la distinción `infra_error` vs. falla del alumno. Lo reemplaza `historico/intercambios-g5/Respuesta_G8_a_Propuesta_V4.md` §2 y §6 |
+| `historico/intercambios-g5/Respuesta_G8_a_Propuesta_V4.md` | **La respuesta que le mandamos al Grupo 5** el 7‑sep‑2026: aceptamos el modelo de dos capas y la Opción 1, y les pasamos la mitad del contrato del contenedor que no conocían (buzón de salida, códigos de salida, desvío de `stdout`, qué hace la capa 1 después). Tiene también su PDF |
+| `historico/intercambios-g5/Propuesta_Integracion_G5_G6_Entrypoint_V4.pdf` | Lo que mandó el Grupo 5 |
+| `historico/fuentes/` | Propuesta de la cátedra, láminas, y las versiones de los documentos previas a la investigación |
 
 > **Cómo se prueba en Windows.** `docker-java` usa el *named pipe* de Docker Desktop mediante
 > `npipe://`; en Linux usa el socket local mediante `unix://`. TCP está prohibido en producción.
