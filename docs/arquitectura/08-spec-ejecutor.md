@@ -173,7 +173,7 @@ Content-Length: <n>
 
 **R3.1** — El ejecutor **NO DEBE** emitir un veredicto académico (aprobado/desaprobado). Devuelve materia prima; el worker decide. Mezclar las dos cosas metería lógica de negocio en el componente privilegiado.
 
-**R3.5** — El ejecutor **NO DEBE** interpretar el contenido de `reporte`. Con la imagen de referencia ese contenido **no es el XML de JUnit**: es un sobre JSON del runner (`schema`, `fase`, `resultado`, `recursos`, y los XML adentro como `tar.gz` en base64), porque JUnit escribe más de un archivo y el worker necesita los tiempos medidos adentro del contenedor. El ejemplo de arriba muestra un `<testsuite>` por brevedad y **eso induce a error**: el campo transporta lo que la imagen ponga entre los marcadores, y quien lo sabe leer es el worker. Cambiar la forma del sobre no toca al ejecutor.
+**R3.5** — El ejecutor **NO DEBE** interpretar el contenido de `reporte`. Con la imagen de referencia ese contenido **no es el XML de JUnit**: es el sobre `sandbox.capa1/v2` de la capa 1 (§7.1), con el buzón de reportes adentro como `tar.gz` en base64, porque la capa 2 puede escribir más de un archivo y la capa 1 no sabe de qué formato son. El ejemplo de arriba muestra un `<testsuite>` por brevedad y **eso induce a error**: el campo transporta lo que la imagen ponga entre los marcadores, y quien lo sabe leer es el worker. Cambiar la forma del sobre no toca al ejecutor.
 
 **R3.4** — `oomKilled` **DEBE** venir del `inspect` del paso 5b y **NO DEBE** inferirse del `exitCode`. El motivo está medido: con la JVM bien configurada el que se queda sin memoria es la JVM y no el cgroup, así que el out-of-memory llega como **`exitCode: 3` con `OOMKilled: false`**, y no como el `137` que uno esperaría. Los dos caminos existen y el worker necesita los dos datos para mapearlos. Un `exitCode` sin `oomKilled` deja al worker sin poder distinguir «se quedó sin memoria» de «el código del alumno falló», y eso cambia el veredicto que ve el alumno.
 
@@ -589,6 +589,68 @@ escrito en castellano.
 **R7.8** — De `stdout` se remueve desde el primer carácter del marcador de inicio hasta el último del de fin, más el salto de línea inmediatamente posterior si existe. Del contenido del reporte se recorta el salto que sigue al marcador de inicio y el que precede al de fin, y nada más.
 
 > **Verificación obligatoria.** El mecanismo depende de que `read` en el shell del entrypoint no consuma más de la primera línea del descriptor, dejando el resto para `tar`. Es el comportamiento esperado en `dash` y `busybox sh` porque leen de a un byte sobre descriptores no posicionables, pero **hay que probarlo** (§13.3) antes de dar por buena esta sección.
+
+### 7.1 El sobre de la capa 1: `sandbox.capa1/v2`
+
+Es el `<contenido del reporte>` de R7.4. **El ejecutor no lo lee** (R3.5): este contrato es entre la
+capa 1 de la imagen, que lo emite, y el worker, que lo interpreta. Está acá porque viaja por el canal
+que define esta sección. **Estado: PROBADO.** La fuente es `capa1.sh` (`emitir()`) y el lector es
+`SobreCapa1` del worker; los dos se ejercitan juntos en `D16IT`, la prueba contra el ejecutor y la
+imagen reales.
+
+**R7.12** — El sobre **DEBE** ser un único objeto JSON en una línea, con exactamente estos 12 campos
+y en este orden:
+
+```json
+{"schema":"sandbox.capa1/v2","resultado":"OK","detalle":"","exitEval":0,
+ "procesosSobrevivientes":0,"faseDeclarada":"","detalleDeclarado":"",
+ "recursos":{"msEval":3810,"cpuEvalMs":5120},
+ "reportesTarGzB64":"H4sI...","stdoutB64":"","stderrB64":"","truncado":false}
+```
+
+| Campo | Tipo | Significado |
+|---|---|---|
+| `schema` | string | Siempre `"sandbox.capa1/v2"` |
+| `resultado` | enum R7.13 | Cómo terminó la **capa 2**, visto desde la capa 1. **No es el veredicto** |
+| `detalle` | string | Texto de diagnóstico de la capa 1. Escapado, sin caracteres de control, ≤ 512 B |
+| `exitEval` | int \| null | Código de salida de la capa 2. `null` si la capa 2 no llegó a correr (`BUNDLE_INVALIDO`) |
+| `procesosSobrevivientes` | int | Procesos vivos después de la capa 2, ya matados por la capa 1 |
+| `faseDeclarada` | string | Copia de `$SANDBOX_STATUS/fase` (≤ 128 B). **Lo escribe la capa 2: diagnóstico, nunca fuente de veredicto** |
+| `detalleDeclarado` | string | Copia de `$SANDBOX_STATUS/detalle` (≤ 512 B). Misma advertencia |
+| `recursos.msEval` | int | Reloj de pared de la capa 2, en ms |
+| `recursos.cpuEvalMs` | int | CPU de usuario + sistema de los hijos, en ms |
+| `reportesTarGzB64` | string | `$SANDBOX_REPORTS` entero, empaquetado **sin mirar adentro**, `tar.gz` en base64. `""` si el buzón quedó vacío |
+| `stdoutB64` / `stderrB64` | string | Streams de la capa 2, truncados **adentro** del contenedor a `SALIDA_LIMITE_BYTES` (65536 B), en base64 |
+| `truncado` | bool | `true` si alguno de los dos streams superó ese tope |
+
+**R7.13** — `resultado` **DEBE** ser uno de estos 8 valores. El exit code del contenedor sale de
+esta tabla, pero es un resumen para operar: **el veredicto sale del sobre, no del exit code.**
+
+| `resultado` | Exit del contenedor | Cuándo |
+|---|---|---|
+| `OK` | 0 | La capa 2 salió con 0 y dejó algo en el buzón. **No significa que el alumno aprobó** |
+| `BUNDLE_INVALIDO` | 22 | Nonce, largo del guion o tar mal formados; guion incompleto; tar con enlaces, rutas absolutas o `..` |
+| `EVALUACION_ANOMALA` | 23 | La capa 2 salió con un código distinto de 0, 124, 137 y fuera de 40-59 |
+| `TIMEOUT_PARED` | 27 | Saltó el backstop de la capa 1 (`SANDBOX_EVAL_TIMEOUT_S`, 45 s) |
+| `SIN_REPORTE` | 28 | La capa 2 salió con 0 pero dejó el buzón vacío |
+| `VEREDICTO_NO_CONFIABLE` | 30 | Sobrevivió al menos un proceso a la capa 2: el buzón pudo ser reescrito |
+| `MUERTO_POR_SENAL` | 31 | `SIGKILL` sin que saltara el backstop. El worker desambigua con `oomKilled` (R3.4) |
+| `DETENIDO_POR_EVALUACION` | el mismo `exitEval` | La capa 2 se frenó a propósito con un código de la banda 40-59. La capa 1 lo propaga sin traducirlo |
+
+**R7.14** — Precedencia: `VEREDICTO_NO_CONFIABLE` **DEBE** pisar cualquier otra clasificación salvo
+`BUNDLE_INVALIDO`, que ocurre antes de invocar a la capa 2. `SIN_REPORTE` sólo se aplica cuando la
+clasificación era `OK`: un código de la banda 40-59 puede legítimamente no dejar reporte.
+
+**R7.15** — Los valores del sobre anterior a la Opción 1 del V4 (`ERROR_COMPILACION`,
+`SUITE_INVALIDA`, `TIMEOUT_COMPILACION`, `TIMEOUT_CPU`, `LIMITE_MEMORIA`, `SALIDA_ANTICIPADA`) **NO
+DEBEN** emitirse. Compilar, correr las pruebas y validar el reporte es conocimiento de la capa 2, y
+esas distinciones viajan en `exitEval`, banda 40-59. Su tabla está en
+[`04-ms-sandbox-worker.md`](./04-ms-sandbox-worker.md) §6 (el mapeo de veredictos del worker).
+
+**R7.16** — El worker **DEBE** tolerar campos desconocidos, para que el sobre pueda crecer sin romperlo,
+y **DEBE** tratar como `ERROR_INTERNO` un `resultado` desconocido o ausente. *PENDIENTE:* hoy el worker
+no verifica el valor de `schema`; un cambio incompatible del sobre exige subir a `v3` y hacer que el
+worker rechace lo que no conoce.
 
 ---
 

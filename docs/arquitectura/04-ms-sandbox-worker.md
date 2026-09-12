@@ -266,22 +266,16 @@ Y hay que **cerrar el círculo**: al mandar el mensaje a la DLQ, la fila de `eje
 
 ## 6. Paso 1 — ejecutar
 
-> ## ⚠ Esta sección gana trabajo con el V4 (8‑sep‑2026)
+> **Estado (12‑sep‑2026).** El mapeo de esta sección está **implementado y probado** en
+> `ms-sandbox/worker/` (`Nucleo`, `Juez`, `BandaDeEvaluacion`), incluida la prueba contra el
+> ejecutor y la imagen reales (`D16IT`). Bajo el modelo de dos capas la capa 1 no sabe qué corrió
+> adentro, así que **la verificación de la evidencia vive en el worker**, elegida por formato
+> (`junit-xml` hoy) y *fail-closed*: un formato sin verificador no puede producir `EXITO`. Ver
+> [`12-d16-evidencia-de-ejecucion.md`](./12-d16-evidencia-de-ejecucion.md) (dónde se verifica que
+> hubo ejecución de verdad).
 >
-> **El reparto de §6 se confirma y se refuerza**: el ejecutor devuelve materia prima, el worker
-> produce el veredicto. Bajo el modelo de dos capas eso se vuelve más cierto, no menos, porque el
-> contenedor deja de saber qué corrió adentro.
->
-> Lo que cambia es que **el mapeo de abajo está cableado a JUnit**, y ya no puede estarlo. La
-> guarda que no se negocia —no hay `EXITO` sin `tests > 0` leído del XML de verdad— es la regla
-> **D6**, y hoy la aplica en parte el entrypoint. Bajo el sándwich la tapa no sabe leer un XML de
-> JUnit, porque no sabe que existe JUnit: **la verificación entera se muda acá**, indexada por el
-> `reportFormat` que declara el perfil (`junit-xml`, `pmd-xml`, …).
->
-> **D16 está cerrada y P9 está implementado y probado**: el modelo de dos capas ya vive en la
-> imagen y en el ejecutor. Para integrar el worker todavía falta implementar el verificador
-> seleccionado por `reportFormat`, con comportamiento *fail-closed*. Ver
-> [`12-d16-evidencia-de-ejecucion.md`](./12-d16-evidencia-de-ejecucion.md).
+> **PENDIENTE:** el formato todavía está fijo en el worker (`Nucleo.FORMATO_DE_EVIDENCIA`); leerlo
+> del `reportFormat` del perfil llega con el catálogo de perfiles del worker.
 
 El modelo mental que más ayuda:
 
@@ -352,43 +346,59 @@ Acá hay una trampa que sólo apareció al correr el ejecutor contra la imagen r
 | Capa | Quién la produce | Qué dice |
 |---|---|---|
 | `resultado`, `exitCode`, `oomKilled` | El **ejecutor** | Cómo terminó el contenedor **como proceso** |
-| El contenido de `reporte` | La **imagen del runner** | Qué pasó **adentro**: fase, relojes, y los XML de JUnit |
+| El contenido de `reporte` | La **capa 1** de la imagen (`capa1.sh`) | Cómo terminó la **capa 2**, su código de salida, y el buzón de reportes |
 
-El campo `reporte` **no es el XML de JUnit**: es un sobre JSON que la imagen emite entre los marcadores del nonce, y que trae los XML adentro como `tar.gz` en base64. El ejecutor no lo interpreta —no debe (R3.1, R3.5)— así que ese trabajo es del worker.
+El campo `reporte` **no es el XML de JUnit**: es el sobre `sandbox.capa1/v2` que la capa 1 emite entre los marcadores del nonce, con el buzón de reportes adentro como `tar.gz` en base64. Su contrato completo está en [`08-spec-ejecutor.md`](./08-spec-ejecutor.md) §7.1 (el sobre de la capa 1). El ejecutor no lo interpreta —no debe (R3.1 y R3.5 de `08`: el ejecutor no decide veredictos ni lee el reporte)— así que ese trabajo es del worker.
 
-> **Por qué importa:** una ejecución que agota el reloj de CPU llega como `resultado: COMPLETADA` con reporte presente. Desde los campos del ejecutor es indistinguible de una entrega que corrió bien. **El que la clasifica es el `resultado` del sobre.**
+> **Por qué importa:** una ejecución que agota el reloj de CPU llega como `resultado: COMPLETADA` con reporte presente. Desde los campos del ejecutor es indistinguible de una entrega que corrió bien. **La clasifican el `resultado` y el `exitEval` del sobre.**
 
-**Paso 1 — mirar los campos del ejecutor:**
+**Paso 1 — mirar los campos del ejecutor** (`Nucleo.evaluar`). Las guardas van en este orden:
 
-| Respuesta del ejecutor | Qué hace el worker |
-|---|---|
-| `RECHAZADA` (`503`) | **Ningún veredicto**: `nack` con requeue y backoff. Ver [§12](#12-cómo-le-habla-al-ejecutor) |
-| `ERROR_DAEMON` (`502`) | `ERROR_INTERNO`. **No consume vida ni intento** |
-| `TIMEOUT` | `ERROR_INTERNO`, no `TIMEOUT`: si saltó el backstop de 60 s del ejecutor, el que falló es un reloj nuestro de adentro |
-| `COMPLETADA` con `oomKilled: true` | `LIMITE_MEMORIA`. Lo mató el cgroup. **Es el camino menos frecuente**: con la JVM bien configurada gana casi siempre el otro, el del paso 2 |
-| `COMPLETADA` con `reporteAusente: true` | `ERROR_INTERNO`: el contenedor no emitió sobre. Sin sobre no hay veredicto posible |
-| `COMPLETADA` con reporte | **Sigue al paso 2** |
-
-**Paso 2 — leer el `resultado` del sobre:**
-
-| `resultado` del sobre | Veredicto | ¿Consume vida? |
+| Respuesta del ejecutor | Veredicto | ¿Consume intento? |
 |---|---|---|
-| `OK` + XML con `tests > 0`, sin fallas | `EXITO` | — |
-| `OK` + XML con fallas | `FALLO_TESTS` | Sí |
-| `SALIDA_ANTICIPADA` | `SALIDA_ANTICIPADA` | Sí |
-| `TIMEOUT_CPU` / `TIMEOUT_PARED` / `TIMEOUT_COMPILACION` | `TIMEOUT` | Sí |
-| `LIMITE_MEMORIA` | `LIMITE_MEMORIA` | Sí — es **el otro camino** de la memoria: la JVM murió antes que el cgroup, así que **`oomKilled` llega en `false`** (R3.4). Medido: el contenedor sale con **25**, no con el 3 de la JVM, porque el entrypoint traduce el código antes de salir. Otro motivo para no leer el exit code |
-| `ERROR_COMPILACION` | `ERROR_COMPILACION` | Sí |
-| `SUITE_INVALIDA` | `SUITE_INVALIDA` | **No** — la suite es del profesor |
-| `VEREDICTO_NO_CONFIABLE` | `VEREDICTO_NO_CONFIABLE` | Abierto → [D7](./README.md) |
-| `SIN_REPORTE` / `MUERTO_POR_SENAL` / `BUNDLE_INVALIDO` | `ERROR_INTERNO` | **No** |
+| `RECHAZADA` (`503`) | **Ningún veredicto**: se reintenta con backoff. Ver [§12](#12-cómo-le-habla-al-ejecutor). *PENDIENTE: el reintento llega con la cola; hoy el cliente corta con `EjecutorSaturado`* | — |
+| `ERROR_DAEMON` (`502`), `422`, socket caído, timeout del cliente | `ERROR_INTERNO` | No |
+| `TIMEOUT` | `ERROR_INTERNO`, no `TIMEOUT`: si saltó el backstop de 60 s del ejecutor, el que falló es un reloj nuestro de adentro | No |
+| `COMPLETADA` con `oomKilled: true` | `LIMITE_MEMORIA`: lo mató el cgroup. Se mira **antes** que el reporte | Sí |
+| `COMPLETADA` con `reporteAusente: true` | `ERROR_INTERNO`: sin sobre no hay veredicto posible | No |
+| `COMPLETADA` con un sobre que no se puede leer (JSON inválido, base64 inválido, buzón mayor a 8 MiB) | `ERROR_INTERNO` | No |
+| `COMPLETADA` con sobre legible | **Sigue al paso 2** | |
 
-> **Y la guarda que no se negocia, encima de todo lo anterior:** aunque el sobre diga `OK`, no hay `EXITO` sin **`tests > 0` leído del XML de verdad**, no del contador que el runner trae ya calculado. El contador es defensa en profundidad; la fuente es el XML.
+**Paso 2 — leer el `resultado` del sobre** (`Juez.juzgar`). La capa 1 emite **8 valores**:
+
+| `resultado` del sobre | Veredicto | ¿Consume intento? |
+|---|---|---|
+| `OK` + evidencia con `corridas > 0` y sin fallas | `EXITO` | — |
+| `OK` + evidencia con fallas | `TESTS_FALLIDOS` | Sí |
+| `OK` + evidencia con `corridas = 0` | `SALIDA_ANTICIPADA` | Sí |
+| `OK` sin verificador para el formato, o evidencia ilegible | `ERROR_INTERNO` (*fail-closed*) | No |
+| `DETENIDO_POR_EVALUACION` | **Sigue al paso 3**, por `exitEval` | según la banda |
+| `TIMEOUT_PARED` | `TIMEOUT`: saltó el backstop de 45 s de la capa 1 | Sí |
+| `VEREDICTO_NO_CONFIABLE` | `VEREDICTO_NO_CONFIABLE`: sobrevivieron procesos a la capa 2 y el buzón pudo ser reescrito | *PROVISIONAL: No, hasta que cierre D7 (si este veredicto consume intento)* |
+| `MUERTO_POR_SENAL` | `LIMITE_MEMORIA` si `oomKilled`; si no, `ERROR_INTERNO` | Sí / No |
+| `SIN_REPORTE` / `BUNDLE_INVALIDO` / `EVALUACION_ANOMALA` | `ERROR_INTERNO` | No |
+| Cualquier otro valor, o ausente | `ERROR_INTERNO`: es un despliegue desalineado, no una entrega mala | No |
+
+**Paso 3 — la banda 40-59 del `exitEval`** (`BandaDeEvaluacion`). Son los códigos con los que la capa 2 se frena a propósito. *PROVISIONAL:* la tabla es la de nuestro perfil de referencia (`perfiles/java21-junit.sh`) hasta que el Grupo 5 conteste A3 (qué códigos 40-59 define); cuando conteste, cambia ese archivo y nada más.
+
+| `exitEval` | Qué pasó | Veredicto | ¿Consume intento? |
+|---|---|---|---|
+| 40 | No compila la solución | `ERROR_COMPILACION` | Sí |
+| 41 | No compila la suite | `SUITE_INVALIDA` | **No** — la suite es de la cátedra |
+| 42 | Venció el reloj de compilación | `ERROR_INTERNO` | No — es un reloj de plataforma |
+| 43 | La JVM se quedó sin memoria | `LIMITE_MEMORIA` | Sí — es **el otro camino** de la memoria: muere la JVM antes que el cgroup, así que `oomKilled` llega en `false` (R3.4 de `08`) |
+| 44 | Reloj de CPU del alumno | `TIMEOUT` | Sí |
+| 45 | Backstop de pared de la suite | `TIMEOUT` | Sí |
+| 46 | La JVM no escribió reporte | `ERROR_INTERNO` | No |
+| 47 | Reporte con `tests = 0` | `SALIDA_ANTICIPADA` | Sí |
+| otro de la banda | Sin significado todavía | `ERROR_INTERNO` (*fail-closed*) | No |
+
+> **Y la guarda que no se negocia, encima de todo lo anterior:** no hay `EXITO` sin **`corridas > 0` contadas en los XML del buzón**, nunca de un contador que alguien trae ya calculado. Hay dos de esos contadores y los dos se ignoran como fuente: el `tests` que la capa 2 suma en su `nota.json`, y el propio `exitEval = 47`. Si la capa 2 declara 47 pero los XML muestran pruebas corridas, **manda el conteo** y la entrega se juzga como `OK`: el 47 es el vigilado vigilándose.
 
 **Las dos trampas de esta tabla**, las dos verificadas corriendo el pipeline real:
 
-- **`tests > 0` alcanza para no aprobar de más, no para clasificar.** Un `TIMEOUT_CPU` y un `SALIDA_ANTICIPADA` llegan los dos con `tests = 0`. Un worker que sólo mirara esa guarda le diría al alumno "saliste antes de correr los tests" cuando en realidad se le agotó el procesador. No aprueba de más —que es lo que importa— pero **miente sobre la causa**, y el mensaje al alumno es parte del veredicto.
-- **El exit code del contenedor no clasifica nada.** El sobre y el exit code pueden discrepar: encontramos un caso donde la imagen informaba `TIMEOUT_CPU` en el sobre y salía con `exit 0`. Se corrigió en el entrypoint, pero la regla de diseño se mantiene por si vuelve a pasar: **el sobre manda.**
+- **`corridas > 0` alcanza para no aprobar de más, no para clasificar.** Un timeout de CPU (44) y una salida anticipada llegan los dos sin pruebas corridas. Un worker que sólo mirara esa guarda le diría al alumno "saliste antes de correr los tests" cuando en realidad se le agotó el procesador. Por eso el orden del `switch` de `Juez` **es** la guarda: `resultado` y banda se resuelven antes de mirar `corridas`.
+- **El exit code del contenedor no clasifica nada.** Sale del `resultado` (22, 23, 27, 28, 30, 31) o, en `DETENIDO_POR_EVALUACION`, repite el `exitEval`. Es un resumen para operar, no una fuente: **el sobre manda.**
 
 ### Las cuatro reglas que no se negocian, y quién las garantiza ahora
 
@@ -862,7 +872,7 @@ Lo que hay que verificar del worker no es el camino feliz:
 | **Broker caído al aceptar la entrega** | El outbox retiene, el relay republica al volver: cero jobs perdidos. **La prueba que justifica el outbox** |
 | Mensaje envenenado | Tras N intentos termina en la DLQ, y la fila queda `ERROR_INTERNO` — no `ENCOLADA` para siempre |
 | Cola llena | `429` con `Retry-After`, y **readiness sigue UP** |
-| Suite de entregas maliciosas | Loop infinito → `TIMEOUT`; fork bomb → contenida por `--pids-limit`; OOM → `LIMITE_MEMORIA` **por los dos caminos** (`OOMKilled` y `exitCode 3`); intento de red → `SocketException`; `System.exit(0)` → `SALIDA_ANTICIPADA`, **no** aprueba |
+| Suite de entregas maliciosas | Loop infinito → `TIMEOUT`; fork bomb → contenida por `--pids-limit`; OOM → `LIMITE_MEMORIA` **por los dos caminos** (`oomKilled` y `exitEval 43`, §6); intento de red → `SocketException`; `System.exit(0)` → `SALIDA_ANTICIPADA`, **no** aprueba |
 | Bundle con `ruta` hostil | `../../x.java` y `/opt/x.java` → `400 RUTA_INVALIDA` **en la API**, sin llegar a Docker |
 | **Tar con entrada symlink** | Un symlink `Solucion.java → /etc/passwd` más una entrada regular que escribe sobre él. **No contiene `../`**: la validación de `ruta` no lo ve. Es el vector de CVE-2024-28185 (Judge0) |
 | **Tar con hard link** | Entrada apuntando fuera del directorio de extracción. Misma familia, distinto mecanismo |
