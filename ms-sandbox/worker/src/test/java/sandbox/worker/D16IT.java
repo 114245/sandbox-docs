@@ -2,7 +2,6 @@ package sandbox.worker;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
@@ -33,14 +32,9 @@ class D16IT {
 
         assertFalse(sobre.reporteAusente(), "el ejecutor no encontro bloque de reporte");
 
-        SobreCapa1 capa1  = Desempaquetador.leerSobre(sobre.reporte());
-        Buzon      buzon  = Desempaquetador.abrirBuzon(capa1);
-
-        Optional<Evidencia> evidencia = Verificadores.porDefecto()
-                .para("junit-xml")
-                .map(v -> v.verificar(buzon));
-
-        return Juez.juzgar(capa1, sobre.oomKilled(), evidencia);
+        // La cadena entera es Nucleo.evaluar: la prueba de aceptacion ejercita el codigo de
+        // produccion, no una copia armada a mano en el test.
+        return new Nucleo().evaluar(sobre);
     }
 
     @Test
@@ -74,13 +68,10 @@ class D16IT {
         // declarado tiene que tumbar el EXITO. Es la propiedad de 12-d16 seccion 5.
         byte[] tar = Empaquetador.desdeDirectorio(BUNDLES.resolve("ok-suma"));
         Sobre sobre = new ClienteEjecutor(socket()).ejecutar(UUID.randomUUID().toString(), PERFIL, tar);
-        SobreCapa1 capa1 = Desempaquetador.leerSobre(sobre.reporte());
 
-        Optional<Evidencia> sinVerificador = Verificadores.porDefecto()
-                .para("pmd-xml")
-                .map(v -> v.verificar(Desempaquetador.abrirBuzon(capa1)));
-
-        Fallo fallo = Juez.juzgar(capa1, sobre.oomKilled(), sinVerificador);
+        // Mismo Nucleo de produccion; lo unico que cambia es el formato declarado, que es
+        // justo la perilla del fail-closed.
+        Fallo fallo = new Nucleo(Verificadores.porDefecto(), "pmd-xml").evaluar(sobre);
 
         assertEquals(Veredicto.ERROR_INTERNO, fallo.veredicto());
         assertFalse(fallo.consumeIntento());
