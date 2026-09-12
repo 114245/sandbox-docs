@@ -1,0 +1,25 @@
+# Contexto de build compartido por ejecutor/Dockerfile y worker/Dockerfile (contexto = ms-sandbox/).
+# Lo que sigue no hace falta dentro de ninguna imagen y solo infla el contexto que se manda al
+# daemon de Docker en cada build.
+
+# Artefactos de compilacion locales: cada Dockerfile compila adentro del contenedor con su propia
+# cache de Maven, asi que un target/ del host es basura (y puede traer jars de una JVM/SO distinta).
+*/target/
+target/
+
+# Editor / IDE.
+.idea/
+*/.idea/
+*.iml
+
+# Estado de Claude Code / SDD: notas de trabajo, nunca insumo de una imagen.
+.claude/
+*/.claude/
+
+# Control de versiones: no hace falta adentro de ninguna imagen.
+.git/
+.gitignore
+
+# Basura de SO.
+.DS_Store
+Thumbs.db

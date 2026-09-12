@@ -1,0 +1,63 @@
+volumes:
+  # Publica el socket propio del ejecutor para que worker-tests lo vea en el mismo path.
+  socket-ejecutor:
+  # Cache de Maven (~/.m2). Un volumen de compose solo se monta en contenedores que CORREN, no
+  # durante "docker build" (eso es cache de capas / BuildKit, algo aparte); de las dos etapas que
+  # compilan, worker-tests es la unica que corre "mvn test" en runtime (ver worker/Dockerfile), asi
+  # que es la que efectivamente reusa este volumen entre corridas repetidas. La compilacion del
+  # ejecutor pasa en la etapa de build de su Dockerfile: ese reuso ya lo cubre el cache de capas de
+  # Docker (COPY pom.xml antes que src/), sin volumen de compose de por medio.
+  m2-cache:
+
+services:
+  # Solo para construir la imagen del runner (imagenes/java21-junit/); nunca arranca como
+  # servicio de este compose: no tiene sentido "levantarla", el ejecutor la usa por su cuenta
+  # para crear los contenedores de evaluacion. Va bajo un profile para que "docker compose up"
+  # (sin --profile) no intente correrla.
+  #
+  # Construir a mano con:
+  #   docker compose --profile build-only build runner
+  # (equivalente a: docker build -f imagenes/java21-junit/Dockerfile -t sandbox-runner:2.0.0-capa1 imagenes/)
+  runner:
+    image: sandbox-runner:2.0.0-capa1
+    build:
+      context: ./imagenes
+      dockerfile: java21-junit/Dockerfile
+    profiles:
+      - build-only
+
+  ejecutor:
+    build:
+      context: .
+      dockerfile: ejecutor/Dockerfile
+    volumes:
+      # Habla con el daemon de Docker real del host para crear los contenedores de evaluacion.
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Donde el ejecutor publica SU PROPIO socket (server), compartido con worker-tests.
+      - socket-ejecutor:/run/ejecutor
+    healthcheck:
+      test: ["CMD", "test", "-S", "/run/ejecutor/ejecutor.sock"]
+      interval: 2s
+      timeout: 1s
+      retries: 15
+      start_period: 10s
+
+  worker-tests:
+    build:
+      context: .
+      dockerfile: worker/Dockerfile
+    volumes:
+      - socket-ejecutor:/run/ejecutor
+      - m2-cache:/root/.m2
+    environment:
+      SANDBOX_EJECUTOR_SOCKET: /run/ejecutor/ejecutor.sock
+    depends_on:
+      # NO es opcional. D16IT hace "assumeTrue(Files.exists(socket()))" y se SALTEA (no falla)
+      # si el socket todavia no existe. Sin "condition: service_healthy", un arranque lento del
+      # ejecutor haria que worker-tests arranque antes de que el socket exista: los tres tests de
+      # D16IT se saltearian solos, "mvn test" saldria con exit 0 (ningun test fallo, porque
+      # ninguno corrio) y "docker compose up" reportaria exito sin haber probado nada — un
+      # salto silencioso que se ve identico a un verde real. Condicionar a service_healthy fuerza
+      # a que worker-tests espere a que el ejecutor haya publicado el socket antes de arrancar.
+      ejecutor:
+        condition: service_healthy
