@@ -300,14 +300,20 @@ class BundlesIT {
         assertEquals(6, r.surv, r.diagnostico());
     }
 
-    /** Igual que hostil-reporte pero en loop -> mismo resultado, tarda mas por el reloj de pared. */
+    /**
+     * Igual que hostil-reporte pero en loop -> mismo resultado, tarda mas por el reloj de pared.
+     *
+     * <p>exitEval puede ser 0 o 47: la carga hostil reescribe el buzon en loop y compite con la guarda
+     * de tests=0 de la capa 2 (codigo 47). Cual gana depende del scheduling. Lo que detecta el ataque
+     * no depende de esa carrera: VEREDICTO_NO_CONFIABLE, exit 30 y los 6 sobrevivientes.
+     */
     @Test
     @Timeout(150)
     void p4c_hostilReporteLoop() throws IOException {
         Resultado r = correrBundle("hostil-reporte-loop");
         assertEquals(30, r.exitCode, r.diagnostico());
         assertEquals("VEREDICTO_NO_CONFIABLE", r.resultado, r.diagnostico());
-        assertEquals(0, r.exitEval, r.diagnostico());
+        assertTrue(r.exitEval != null && (r.exitEval == 0 || r.exitEval == 47), r.diagnostico());
         assertEquals(6, r.surv, r.diagnostico());
     }
 
