@@ -1,0 +1,58 @@
+name: ms-sandbox
+
+on:
+  push:
+    paths:
+      - "ms-sandbox/**"
+      - ".gitattributes"
+      - ".github/workflows/ms-sandbox.yml"
+  pull_request:
+    paths:
+      - "ms-sandbox/**"
+      - ".gitattributes"
+      - ".github/workflows/ms-sandbox.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ms-sandbox/worker
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      # D16IT se saltea sola: necesita un ejecutor levantado. Es el unico skip esperado del repo.
+      - name: Tests del worker
+        run: mvn -B verify
+
+  ejecutor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: ms-sandbox
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Imagen real de dos capas (sandbox-runner:2.0.0-capa1)
+        run: docker build -f imagenes/java21-junit/Dockerfile -t sandbox-runner:2.0.0-capa1 imagenes
+      - name: Fixture de ProtocoloIT (sandbox-runner:1.0.0)
+        run: docker build -t sandbox-runner:1.0.0 ejecutor/src/test/fixtures/a6
+      - name: Tests del ejecutor, incluida la suite adversaria
+        working-directory: ms-sandbox/ejecutor
+        run: mvn -B verify
+      - name: Los tests con Docker corrieron de verdad
+        if: success() || failure()
+        run: sh ci/verificar-reportes-it.sh ejecutor/target/surefire-reports
