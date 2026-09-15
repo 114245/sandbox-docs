@@ -178,6 +178,52 @@ class BundlesIT {
     }
 
     // ------------------------------------------------------------------
+    // 2b) El peor caso de plataforma (F-16, spec 4.3)
+    // ------------------------------------------------------------------
+
+    /**
+     * Mide lo que el reloj de 60 s del ejecutor gasta fuera del backstop de la capa 1 en el peor caso:
+     * un guion que ignora SIGTERM obliga a agotar backstop + gracia, y el bundle mas grande maximiza
+     * transferencia y extraccion. La medicion es desde el test, asi que tambien incluye crear y
+     * arrancar el contenedor, que quedan FUERA del reloj real: sobreestima, lo que es seguro para
+     * validar la cota {@link PlazosDeclarados#MARGEN_PLATAFORMA_S}.
+     *
+     * <p>Se aceptan TIMEOUT_PARED (27) y MUERTO_POR_SENAL (31): cuando la gracia de {@code timeout -k}
+     * llega al SIGKILL, GNU timeout sale con 137 y no con 124, y capa1.sh clasifica 137 como
+     * MUERTO_POR_SENAL. Si la CI muestra 31, esa clasificacion se corrige en el sub-proyecto de
+     * capa1.sh, no aca.
+     */
+    @Test
+    @Timeout(120)
+    void plataformaPeorCaso() throws IOException {
+        byte[] tar = tarDelBundleMasGrande();
+        int eval = PlazosDeclarados.evalTimeoutDeDockerfile(
+                PlazosDeclarados.dockerfileDe("sandbox-runner:2.0.0-capa1"));
+        int gracia = PlazosDeclarados.graciaDeCapa1(PlazosDeclarados.CAPA1);
+
+        long inicio = System.nanoTime();
+        var salida = ejecucionFraming.ejecutar(UUID.randomUUID().toString(), tar, "backstop-peor-caso@1");
+        long medidoMs = (System.nanoTime() - inicio) / 1_000_000;
+        long plataformaMs = medidoMs - (eval + gracia) * 1000L;
+
+        String resultado = salida.reporte() == null ? null : campoTexto(salida.reporte(), "resultado");
+        System.out.println("plataforma_peor_caso_ms=" + plataformaMs + " medido_ms=" + medidoMs
+                + " duracion_ejecutor_ms=" + salida.duracionMs() + " tar_bytes=" + tar.length
+                + " resultado=" + resultado + " exit=" + salida.exitCode());
+
+        assertEquals(Ejecucion.Estado.COMPLETADA, salida.resultado(),
+                "salto el reloj del ejecutor; stderr: " + salida.stderr());
+        assertFalse(salida.reporteAusente(), "no vino el sobre; stdout: " + salida.stdout());
+        assertTrue(resultado != null && List.of("TIMEOUT_PARED", "MUERTO_POR_SENAL").contains(resultado),
+                "resultado inesperado: " + resultado + "; sobre: " + salida.reporte());
+        assertEquals(0, campoEntero(salida.reporte(), "procesosSobrevivientes"),
+                "sobre: " + salida.reporte());
+        assertTrue(plataformaMs <= PlazosDeclarados.MARGEN_PLATAFORMA_S * 1000L,
+                "la plataforma gasto " + plataformaMs + " ms fuera del backstop; la cota es "
+                        + PlazosDeclarados.MARGEN_PLATAFORMA_S + " s");
+    }
+
+    // ------------------------------------------------------------------
     // 3) Los nueve bundles, contra la tabla de la §6 del handoff
     // ------------------------------------------------------------------
     //
@@ -333,6 +379,19 @@ class BundlesIT {
         Path ruta = BUNDLES.resolve(nombre);
         assertTrue(Files.isDirectory(ruta), "no existe el bundle: " + ruta.toAbsolutePath());
         return ruta;
+    }
+
+    /** El bundle de pruebas/bundles/ que da el tar mas grande. */
+    private static byte[] tarDelBundleMasGrande() throws IOException {
+        byte[] mayor = null;
+        try (Stream<Path> flujo = Files.list(BUNDLES)) {
+            for (Path dir : flujo.filter(Files::isDirectory).sorted().toList()) {
+                byte[] tar = tarDeBundle(dir);
+                if (mayor == null || tar.length > mayor.length) mayor = tar;
+            }
+        }
+        assertNotNull(mayor, "no hay bundles en " + BUNDLES.toAbsolutePath());
+        return mayor;
     }
 
     /** Empaqueta src/ y test/ del bundle en un tar, igual que {@code tar -cf ... -C dir src test}. */
