@@ -174,19 +174,22 @@ Los tres primeros son de la capa 1 y del ejecutor; los tres últimos son de la c
 perfil (R4.2: «los relojes por fase no deben vivir en el ejecutor»). En `java21-junit.sh` van
 literales porque el script *es* el perfil.
 
-**Invariante que hoy se sostiene a mano.** Las fases de la capa 2 corren en serie adentro del
-backstop de la capa 1, así que su peor caso tiene que caber con margen:
+**Invariante validada por `PlazosInvarianteTest`.** Las fases de la capa 2 corren en serie adentro
+del backstop de la capa 1, así que su peor caso tiene que caber con margen. El test lee los valores
+de los archivos reales (script del perfil, `Dockerfile` de la imagen, `capa1.sh` y `Constantes`):
 
 ```
-2 × TIMEOUT_COMPILE_S + TIMEOUT_TESTS_S + margen  ≤  SANDBOX_EVAL_TIMEOUT_S
-        8 + 8 + 25 = 41 s   (margen 4 s)          ≤  45 s
-SANDBOX_EVAL_TIMEOUT_S + 5 s de gracia (-k 5s)    <  60 s del ejecutor
+Σ plazos de cada `timeout` del script + MARGEN_CAPA2_S (2 s)       ≤  SANDBOX_EVAL_TIMEOUT_S
+        8 + 8 + 25 = 41 s  + 2 s = 43 s                            ≤  45 s
+SANDBOX_EVAL_TIMEOUT_S + gracia (-k 5s) + MARGEN_PLATAFORMA_S (5 s) ≤  60 s del ejecutor
+        45 + 5 + 5 = 55 s                                          ≤  60 s
 ```
 
 Si no se cumple, una entrega lenta pero legítima muere por el backstop de la capa 1
 (`TIMEOUT_PARED`, 27) antes de que la capa 2 pueda emitir su código preciso (42 o 45), y se pierde
-el diagnóstico. `java21-junit@3` la violaba (20 + 20 + 30 = 70 s) y se retiró por `@4`. Ningún
-componente la valida: el ejecutor no ve los relojes, que viajan adentro del guion opaco.
+el diagnóstico. `java21-junit@3` la violaba (20 + 20 + 30 = 70 s) y se retiró por `@4`. El ejecutor
+en ejecución no la ve (los relojes viajan adentro del guion opaco): la valida el test en el build.
+`MARGEN_PLATAFORMA_S` lo mide `BundlesIT#plataformaPeorCaso` en CI.
 
 ## Decisiones no obvias
 
