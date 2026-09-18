@@ -1,0 +1,103 @@
+{
+  "project": {
+    "id": 1804026,
+    "name": "Plataforma de Aprendizaje Gamificado de Programación",
+    "slug": "tup_santoro_exequiel-plataforma-de-aprendizaje-gamificado-de-programacion",
+    "modified_date": "2026-09-01T18:50:46.649Z",
+    "is_backlog_activated": true,
+    "is_issues_activated": true,
+    "is_kanban_activated": false,
+    "is_wiki_activated": true
+  },
+  "pages": [
+    {
+      "id": 226860,
+      "slug": "guia-doc-diagramas",
+      "version": 2,
+      "modified_date": "2026-08-27T01:14:56.501Z",
+      "sha256": "884c4c50b10b834316013e5e4fb6d291da2dd13f7ea1a5715cdc8807eed024a2"
+    },
+    {
+      "id": 226861,
+      "slug": "guia-doc-producto",
+      "version": 3,
+      "modified_date": "2026-08-27T01:18:29.935Z",
+      "sha256": "b30316273cd786c9d3d418eb153a1e47234a0a38cdb6c42014b1e897bec36812"
+    },
+    {
+      "id": 226859,
+      "slug": "guia-doc-proyecto-por-grupo",
+      "version": 3,
+      "modified_date": "2026-08-27T01:13:24.763Z",
+      "sha256": "250819f949f0d923e563f38072643985842d55aaf9ca51d7831f1d5041fb53c6"
+    },
+    {
+      "id": 226856,
+      "slug": "home",
+      "version": 2,
+      "modified_date": "2026-08-27T01:30:45.211Z",
+      "sha256": "74f68d039b3dddb04602b76471d4856891a8fd7c2de63b5c8c81f6c20a4d519f"
+    },
+    {
+      "id": 226857,
+      "slug": "template-epicas",
+      "version": 2,
+      "modified_date": "2026-09-06T00:20:03.943Z",
+      "sha256": "1a0a9847d1476465ddd1add593fe280c40c4fb9a695c39a9e327b7c23ae82add"
+    },
+    {
+      "id": 226858,
+      "slug": "template-hist-usuario",
+      "version": 2,
+      "modified_date": "2026-09-06T00:19:37.459Z",
+      "sha256": "39a7521b74fd4bb160ac997b4478d263e178060e0590a1e780dd11495ecadb28"
+    },
+    {
+      "id": 226862,
+      "slug": "template-proyecto-por-grupo",
+      "version": 3,
+      "modified_date": "2026-08-27T01:30:34.239Z",
+      "sha256": "77f55b4c3122945ef335968a9595dad9d55c2ca9e35f682b1a71246005bc8699"
+    }
+  ],
+  "wiki_links": [
+    {
+      "id": 173217,
+      "title": "Template Épicas",
+      "href": "template-epicas",
+      "order": 0
+    },
+    {
+      "id": 173218,
+      "title": "TEMPLATE HIST. USUARIO",
+      "href": "template-hist-usuario",
+      "order": 1
+    },
+    {
+      "id": 173219,
+      "title": "Guía Doc. Proyecto por Grupo",
+      "href": "guia-doc-proyecto-por-grupo",
+      "order": 2
+    },
+    {
+      "id": 173220,
+      "title": "Guía Doc. Diagramas",
+      "href": "guia-doc-diagramas",
+      "order": 3
+    },
+    {
+      "id": 173221,
+      "title": "Guía Doc. Producto",
+      "href": "guia-doc-producto",
+      "order": 4
+    },
+    {
+      "id": 173222,
+      "title": "TEMPLATE PROYECTO POR GRUPO",
+      "href": "template-proyecto-por-grupo",
+      "order": 5
+    }
+  ],
+  "attachments": [],
+  "attachment_files": []
+}

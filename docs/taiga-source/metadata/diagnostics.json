@@ -1,0 +1,17 @@
+[
+  {
+    "code": "MALFORMED_MARKDOWN_LINK",
+    "page_slug": "template-hist-usuario",
+    "message": "La página contiene un enlace Markdown con grupos repetidos."
+  },
+  {
+    "code": "PAGE_WITHOUT_LINK",
+    "page_slug": "home",
+    "message": "La página no aparece en la navegación de la wiki."
+  },
+  {
+    "code": "PROTECTED_MEDIA_TOKEN_REDACTED",
+    "page_slug": "guia-doc-producto",
+    "message": "Se redactó un token de una URL de medios protegidos antes de guardar la página."
+  }
+]
