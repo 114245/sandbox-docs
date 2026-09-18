@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "taiga-deyappa-test": {
+      "command": "node",
+      "args": ["scripts/start-taiga-mcp.mjs"]
+    }
+  }
+}

@@ -3,3 +3,8 @@ target/
 
 # Configuración local de IntelliJ.
 .idea/
+
+# Credenciales y caché local de la integración Taiga.
+/.env.taiga.local
+/.env.taiga.source.local
+/.cache/taiga-wiki/
