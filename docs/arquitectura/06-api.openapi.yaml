@@ -1,0 +1,296 @@
+openapi: 3.1.0
+info:
+  title: ms-sandbox MVP API
+  version: 0.1.0
+  description: >-
+    Normative annex of 06-api.md. HTTP contract of the MVP. The x-tbd extensions flag details that
+    the user stories and tasks do not fix yet; they must not be implemented by inference.
+paths:
+  /api/sandbox/executions:
+    post:
+      summary: Solicitar una ejecución asíncrona
+      operationId: createExecution
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExecutionRequest'
+      responses:
+        '202':
+          description: Ejecución aceptada o reintento idempotente de una ejecución ya aceptada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecutionAccepted'
+        '400':
+          description: Bundle incompleto, ruta inválida o paquete reservado.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '409':
+          description: La clave de idempotencia ya existe con contenido distinto.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '422':
+          description: Falta la clave de idempotencia o el perfil no pertenece al catálogo.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '429':
+          description: Tope simultáneo del alumno o profundidad máxima de cola alcanzada.
+          headers:
+            Retry-After:
+              description: >-
+                Espera sugerida para QUEUE_FULL, en segundos (RFC 9110 delay-seconds). Cómo se
+                calcula sigue pendiente.
+              schema:
+                type: integer
+                minimum: 1
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /api/sandbox/executions/{id}:
+    get:
+      summary: Consultar estado y salida cruda
+      operationId: getExecution
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Estado actual; el resultado solo aparece en estados terminales.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Execution'
+        '404':
+          description: La ejecución no existe.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+  /languages:
+    get:
+      summary: Obtener el catálogo estático de perfiles
+      operationId: listLanguages
+      responses:
+        '200':
+          description: Los tres perfiles vigentes y sus límites.
+          content:
+            application/json:
+              schema:
+                type: array
+                minItems: 3
+                maxItems: 3
+                items:
+                  $ref: '#/components/schemas/Profile'
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Clave natural con forma `submissionId:attemptNumber`.
+      schema:
+        type: string
+        minLength: 1
+  schemas:
+    CreateExecutionRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - profileId
+        - studentId
+        - courseId
+        - files
+      properties:
+        profileId:
+          $ref: '#/components/schemas/ProfileId'
+        studentId:
+          type: string
+          description: Correlación opaca; también se usa para el tope simultáneo por alumno.
+        courseId:
+          type: string
+          description: Correlación opaca; el sandbox no valida su dominio.
+        files:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/BundleFile'
+      x-tbd: >-
+        T05 debe confirmar el formato final del bundle. La representación binaria o textual de
+        content y sus topes por request todavía no están fijados.
+    BundleFile:
+      type: object
+      additionalProperties: false
+      required:
+        - path
+        - role
+        - content
+      properties:
+        path:
+          type: string
+          description: Ruta relativa, sin barra inicial ni segmentos `..`.
+        role:
+          type: string
+          enum:
+            - solution
+            - test
+            - config
+        content:
+          type: string
+          description: Contenido del archivo; codificación final pendiente de acordar con T05.
+    ExecutionAccepted:
+      type: object
+      additionalProperties: false
+      required:
+        - executionId
+        - status
+        - queuePosition
+      properties:
+        executionId:
+          type: string
+        status:
+          type: string
+          const: QUEUED
+        queuePosition:
+          type: integer
+          minimum: 0
+    Execution:
+      type: object
+      additionalProperties: false
+      required:
+        - executionId
+        - status
+      properties:
+        executionId:
+          type: string
+        status:
+          $ref: '#/components/schemas/ExecutionStatus'
+        result:
+          $ref: '#/components/schemas/RawResult'
+      description: >-
+        result se omite en QUEUED y RUNNING. En estados terminales contiene la salida cruda
+        disponible, sin veredicto de negocio.
+    ExecutionStatus:
+      type: string
+      enum:
+        - QUEUED
+        - RUNNING
+        - COMPLETED
+        - TIMEOUT
+        - MEMORY_LIMIT
+        - INTERNAL_ERROR
+    RawResult:
+      type: object
+      additionalProperties: false
+      properties:
+        stdout:
+          type: string
+          maxLength: 65536
+        stderr:
+          type: string
+          maxLength: 65536
+        reports:
+          type: array
+          items:
+            $ref: '#/components/schemas/RawReport'
+        exitCode:
+          type: [integer, "null"]
+          description: >-
+            Código de salida de la herramienta del perfil, crudo. Nulo cuando la herramienta no
+            llegó a correr. El sandbox no lo interpreta.
+      description: Datos crudos; su contenido no certifica que una entrega sea correcta.
+    RawReport:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - content
+      properties:
+        name:
+          type: string
+        content:
+          type: string
+      x-tbd: La codificación y los metadatos finales de cada reporte todavía no están fijados.
+    ProfileId:
+      type: string
+      enum:
+        - java21-junit
+        - java21-pmd
+        - java21-checkstyle
+    Profile:
+      type: object
+      additionalProperties: false
+      required:
+        - profileId
+        - requiredRoles
+        - executesStudentCode
+        - limits
+      properties:
+        profileId:
+          $ref: '#/components/schemas/ProfileId'
+        requiredRoles:
+          type: array
+          items:
+            type: string
+            enum:
+              - solution
+              - test
+              - config
+        executesStudentCode:
+          type: boolean
+        limits:
+          type: object
+          description: CPU, memoria y timeouts fijados por el perfil, nunca por el request.
+          additionalProperties: true
+      x-tbd: Los nombres JSON definitivos de cada límite expuesto por GET /languages.
+    Problem:
+      type: object
+      additionalProperties: true
+      required:
+        - type
+        - title
+        - status
+        - detail
+        - instance
+        - code
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri-reference
+        code:
+          type: string
+          enum:
+            - UNSUPPORTED_LANGUAGE
+            - INCOMPLETE_BUNDLE
+            - INVALID_PATH
+            - RESERVED_PACKAGE
+            - MISSING_IDEMPOTENCY_KEY
+            - IDEMPOTENCY_CONFLICT
+            - QUEUE_FULL
+            - STUDENT_LIMIT_EXCEEDED
+            - EXECUTION_NOT_FOUND
+      description: Problem Details conforme a RFC 9457, con la extensión estable code.

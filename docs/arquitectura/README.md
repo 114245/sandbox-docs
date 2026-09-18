@@ -1,186 +1,100 @@
-# `ms-sandbox` — índice de la documentación
+# `ms-sandbox`: arquitectura
 
 > **Tema 06 — Sandbox / Runtime.** Grupo 8, 11 integrantes.
 > UTN FRC · Programación 4 + Metodología de Sistemas 2 · TPI 2026.
 >
-> **Qué es este documento.** El mapa. Qué documento es fuente de verdad de qué, en qué orden
-> conviene leerlos, y —lo más importante— **una única tabla de qué está decidido y qué sigue
-> abierto**. Antes esa tabla estaba repartida en tres archivos que se contradecían entre sí.
->
-> Última revisión: **11 de septiembre de 2026** — incorpora el **V4 del Grupo 5**, la respuesta que
-> les mandamos y el cierre de la implementación del ejecutor.
->
-> ### ⚠ El V4 mueve el piso de varios documentos
->
-> El 7‑sep‑2026 llegó `Propuesta_Integracion_G5_G6_Entrypoint_V4.pdf` y le contestamos con
-> [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../historico/intercambios-g5/Respuesta_G8_a_Propuesta_V4.md), donde
-> **aceptamos el modelo de dos capas y elegimos la Opción 1** (catálogo de perfiles). Eso corre la
-> frontera de dominio: dejamos de ser *corredor de Java con opinión* y pasamos a ser
-> **infraestructura agnóstica de lenguaje**.
->
-> La consecuencia para este índice: **`03`, `07`, `06` y `09` conservan partes escritas contra el
-> contrato anterior.** Siguen siendo la fuente de verdad de todo lo que el V4 no toca —aislamiento,
-> worker y outbox— pero su contrato con T05 y su máquina de estados están en revisión. La spec `08`
-> ya incorpora el modelo de dos capas y el catálogo de perfiles.
->
-> **La reescritura profunda de esos documentos espera la contestación de G5**: escribirlos ahora
-> sería escribirlos contra un contrato que todavía se mueve. Mientras tanto, cada uno lleva un
-> aviso de revisión en su encabezado.
+> Índice de la documentación de arquitectura y **tabla única de decisiones**: qué está decidido,
+> qué sigue abierto y qué queda fuera del MVP. Cada documento es la fuente del detalle; este
+> archivo es la fuente del **estado**.
+
+El alcance del MVP lo fijan las [historias de usuario](../historias-usuario/mvp-historias-usuario.md)
+y sus [tareas](../historias-usuario/mvp-tareas.md). Si esta documentación las contradice, mandan
+las historias.
 
 ---
 
-## 1. Por dónde empezar
+## 1. Documentos
 
-| Si querés… | Leé |
+| Documento | Qué cubre |
 |---|---|
-| Entender el servicio completo de una sentada | [`00-propuesta-ms-sandbox.md`](./00-propuesta-ms-sandbox.md) |
-| Ver la arquitectura dibujada | [`06-arquitectura-en-diagramas.md`](./06-arquitectura-en-diagramas.md) |
-| Entender cómo se ejecuta el código aislado | [`03-ms-sandbox-ejecucion.md`](./03-ms-sandbox-ejecucion.md) |
-| Entender la mitad que no ejecuta nada | [`07-arquitectura-api.md`](./07-arquitectura-api.md) |
-| Implementar el ejecutor | [`08-spec-ejecutor.md`](./08-spec-ejecutor.md) |
-| Preparar la defensa de la unidad de patrones | [`05-ms-sandbox-patrones.md`](./05-ms-sandbox-patrones.md) |
-| **Entender cómo se hablan el worker y el ejecutor, sin dar nada por sabido** | [`09-worker-ejecutor-explicado.md`](./09-worker-ejecutor-explicado.md) |
-| **Entender dónde se verifica que hubo ejecución de verdad (D16)** | [`12-d16-evidencia-de-ejecucion.md`](./12-d16-evidencia-de-ejecucion.md) |
-| Ver el sándwich contado largo, con glosario y los cuatro tipos de desafío | [`10-propuesta-g5-sandwich.md`](./10-propuesta-g5-sandwich.md) |
-| Leer lo que efectivamente se le mandó al Grupo 5 | [`otros/Respuesta_G8_a_Propuesta_V4.md`](../../historico/intercambios-g5/Respuesta_G8_a_Propuesta_V4.md) |
+| [`01-contexto.md`](./01-contexto.md) | Qué es el sandbox dentro de la plataforma, la frontera con T05 y el glosario |
+| [`02-arquitectura.md`](./02-arquitectura.md) | Vista general con diagramas: API, cola de trabajo, worker, ejecutor, imágenes y bus de eventos |
+| [`03-aislamiento.md`](./03-aislamiento.md) | Spec del contenedor, catálogo de tres perfiles, límites y relojes, amenazas contenidas y deuda conocida |
+| [`04-ejecutor.md`](./04-ejecutor.md) | Spec del ejecutor: protocolo con el worker, spec del contenedor, timeouts y criterios de aceptación |
+| [`05-worker.md`](./05-worker.md) | Cola de trabajo, DLQ, concurrencia, escritura del resultado en la base, watchdog y emisión de `ExecutionCompleted` |
+| [`06-api.md`](./06-api.md) | Endpoints, errores, idempotencia, outbox y relay, y modelo de datos |
+| [`07-patrones.md`](./07-patrones.md) | Patrones de microservicios de la materia aplicados al servicio |
+
+**Estado del código.** Los tres módulos del MVP (`api`, `worker` y `ejecutor`) se construyen desde
+cero. El código de [`ms-sandbox/`](../../ms-sandbox/README.md) es un prototipo: valida el
+aislamiento y el ejecutor contra Docker real, pero no es el entregable.
 
 ---
 
-## 2. Fuente de verdad
+## 2. Decisiones cerradas
 
-Cuando dos documentos digan cosas distintas sobre un mismo tema, **manda el de esta columna**.
-
-| Tema | Fuente de verdad | Los demás lo referencian |
-|---|---|---|
-| Panorama de los 12 servicios del curso | [`01-panorama-microservicios-backend.md`](./01-panorama-microservicios-backend.md) | — |
-| Aislamiento, origen de los tests, medición de recursos | [`03-ms-sandbox-ejecucion.md`](./03-ms-sandbox-ejecucion.md) | `00`, `05`, `06` |
-| El worker: cola, DLQ, concurrencia, outbox, **la frontera con el ejecutor** | [`04-ms-sandbox-worker.md`](./04-ms-sandbox-worker.md) | `00`, `06`, `07` |
-| Patrones de microservicios aplicados | [`05-ms-sandbox-patrones.md`](./05-ms-sandbox-patrones.md) | `00` |
-| Vistas y diagramas | [`06-arquitectura-en-diagramas.md`](./06-arquitectura-en-diagramas.md) | `00` |
-| La API y el outbox | [`07-arquitectura-api.md`](./07-arquitectura-api.md) | `04`, `06` |
-| **El ejecutor: contrato, spec del contenedor, constantes** | [`08-spec-ejecutor.md`](./08-spec-ejecutor.md) | `04` §6 y §12, `05` §1, `06` §2 |
-| Explicación divulgativa del worker ↔ ejecutor y del recorrido del tar | [`09-worker-ejecutor-explicado.md`](./09-worker-ejecutor-explicado.md) | — (no es fuente de verdad: si contradice a `04` o `08`, mandan ellos) |
-| El sándwich contado largo: glosario, los cuatro tipos de desafío, la película completa | [`10-propuesta-g5-sandwich.md`](./10-propuesta-g5-sandwich.md) | — (documento divulgativo; no es fuente normativa) |
-| **Verificación de evidencia de ejecución: quién la hace y qué pasa si falla** | [`12-d16-evidencia-de-ejecucion.md`](./12-d16-evidencia-de-ejecucion.md) | `04` §6, `08` §5 (**decisión cerrada; integración del worker pendiente**) |
-| Estado de decisiones | **este archivo** | todos |
-
-**Nota sobre el `07`.** Hay dos: [`07-arquitectura-api.md`](./07-arquitectura-api.md) (documento, 652 líneas)
-y [`07-arquitectura-api-lamina.md`](./07-arquitectura-api-lamina.md) (lámina de defensa, 526 líneas).
-Cuentan lo mismo en dos registros. **La fuente de verdad es el documento**; la lámina se regenera
-a partir de él. Unificarlos o separarlos formalmente sigue abierto (D14 abajo).
-
----
-
-## 3. Estado de las decisiones
-
-### Cerradas
-
-| # | Decisión | Dónde vive | Cerrada |
+| # | Decisión | Por qué | Detalle |
 |---|---|---|---|
-| **D1** | **El sidecar es un ejecutor, no un proxy del socket.** Expone `POST /ejecutar`, arma él mismo la spec del contenedor —hardcodeada— y el worker deja de hablar Docker. Descartado `tecnativa/docker-socket-proxy` | `08` §1 (invariante P1), `05` §1, `06` §2 | 1-sep-2026 |
-| **D2** | **El relay del outbox corre en los dos perfiles**, `api` y `worker`, cada uno publicando lo suyo. Antes estaba limitado a `api` con `@Profile` | `04` §10, `07` §3 | 1-sep-2026 |
-| **D3** | **`VERSION_API_DOCKER = v1.43`**, fijada explícita en el path. El mínimo de API varía entre builds del Engine; no es una regla de 29.x. Verificado contra Docker real | `08` §4.3, §5 | 3-sep-2026 |
-| **D4** | **El worker llega al ejecutor por socket Unix; el ejecutor llega a Docker sólo por `unix://` o `npipe://`. TCP está prohibido** porque el cierre abortivo del canal adjunto puede truncar `stdin` | `08` §2 y R5.13, A41 | 11-sep-2026 |
-| **D5** | **El bundle entra por `stdin`**, no por `docker cp`. Saca del camino el endpoint más peligroso y elimina el `attach` bidireccional | `03` §1.5, `08` §5 | 30-ago-2026 |
-| **D6** | **El veredicto sale del XML de JUnit con `tests > 0`**, nunca del exit code. Verificado: `System.exit(0)` aprobaba | `03` §5.1, `00` §8 | 27-ago-2026 |
-| **D9** | **La implementación vigente del ejecutor es Java 21.** El prototipo Node quedó descartado | `08`, `ms-sandbox/ejecutor/` | 10-sep-2026 |
-| **D16** | **La verificación fina de evidencia queda en el worker**, seleccionada por `reportFormat`; la capa 1 conserva sólo guardas agnósticas. P9 está implementado y probado | [`12-d16-evidencia-de-ejecucion.md`](./12-d16-evidencia-de-ejecucion.md), `08` §13 | 11-sep-2026 |
+| **D1** | **El ejecutor es un sidecar que arma él mismo la spec del contenedor.** El worker no habla con Docker | El worker nunca tiene acceso al socket de Docker. Se descartó un proxy del socket porque deja la spec en manos del cliente | `04` |
+| **D2** | **El relay del outbox corre sólo en la `api` y enruta por tipo de mensaje:** el trabajo va a la cola interna y `ExecutionCompleted` al bus de eventos de la plataforma | La `api` es dueña del esquema; el worker inserta filas en el outbox pero no publica | `06`, `05` |
+| **D3** | **Versión de la API de Docker fija en `v1.43`** | El mínimo de la API varía entre builds del Engine. Verificado contra Docker real | `04` |
+| **D4** | **El worker llega al ejecutor por socket Unix, y el ejecutor a Docker sólo por `unix://` o `npipe://`.** TCP está prohibido | El cierre abortivo del canal adjunto por TCP puede truncar `stdin` | `04` |
+| **D5** | **El bundle entra al contenedor por `stdin`, como un tar**, nunca por `docker cp` ni por red | Saca del camino el endpoint más peligroso de Docker | `03`, `04` |
+| **D8** | **Un solo estado `TIMEOUT`, medido en tiempo de CPU del alumno** | Medir en CPU y no en reloj de pared elimina los timeouts intermitentes por contención del host | `03` |
+| **D9** | **El ejecutor se implementa en Java 21** | Se descartó la implementación paralela en Node | `04` |
+| **D14** | **Un único documento para la API** | Las dos versiones anteriores contaban lo mismo en dos registros | `06` |
+| **D15** | **2 CPU por contenedor en `java21-junit`** | Medido de punta a punta: el mismo bundle tarda 3,3 s con 2 CPU y 8,4 s con 1 | `03` |
+| **D17** | **Catálogo estático de tres perfiles** (`java21-junit`, `java21-pmd`, `java21-checkstyle`), cargado al arranque, sin CRUD y sin versión en el identificador | Alcanza para el MVP y no expone administración | `03` |
+| **D18** | **Los límites viven en el perfil, nunca en el request.** Presupuestos separados de compilación y de tests | T05 no puede pedir más recursos de los que el sandbox decide dar | `03` |
+| **D20** | **El resultado se consulta por polling y se avisa con `ExecutionCompleted`**, que lleva sólo `executionId` y `status` por el bus de eventos de la plataforma (Kafka). La salida cruda se trae con `GET` | La salida puede pesar 8 MiB; el aviso tiene que ser chico. El bus lo mantiene el grupo de notificaciones | `05`, `06` |
+| **D22** | **El sandbox devuelve salida cruda y no emite veredicto.** T05 interpreta los reportes | El sandbox ejecuta; decidir si una entrega aprueba es dominio de T05 | `03`, `05` |
+| **D23** | **Seis estados técnicos:** `QUEUED`, `RUNNING`, `COMPLETED`, `TIMEOUT`, `MEMORY_LIMIT` e `INTERNAL_ERROR` | Sin estados de negocio: `COMPLETED` significa que la herramienta terminó, no que aprobó | `05`, `06` |
+| **D24** | **El worker escribe `RUNNING` y el estado terminal directamente en la base, antes del `ack`.** Tiene un usuario limitado a esas columnas y a insertar en el outbox | Evita un canal de resultados de vuelta hacia la `api` | `05` |
+| **D25** | **Errores en `application/problem+json` (RFC 9457)** con la extensión `code` | Ni la cátedra ni T05 fijaron un formato común; se usa el estándar | `06` |
+| **D26** | **`429` por cola llena (`QUEUE_FULL`, con `Retry-After`) y por tope de ejecuciones simultáneas del alumno (`STUDENT_LIMIT_EXCEEDED`)** | Saturado no es roto: la API rechaza sin declararse caída | `06` |
 
-> **D6 quedó generalizada por D16.** El principio sigue en pie —el
-> veredicto sale del reporte, nunca del código de salida— y **el lugar donde se decide tampoco se
-> mueve**: el análisis de **D16** ([`12`](./12-d16-evidencia-de-ejecucion.md)) encontró que la
-> verificación ya estaba asignada al worker en el diseño anterior al V4, y que el conteo de la tapa era una copia
-> redundante. Lo que se cae es esa copia, más el enunciado: D6 nombra a JUnit, y bajo el sándwich la
-> regla se reformula como **"no hay `EXITO` sin evidencia legible de que corrió al menos una unidad
-> de evaluación"**, con el formato declarado por el perfil.
+**A4** (cuántos perfiles arrancan) quedó cerrada por **D17**.
 
-> Las fechas de **D1–D3** son las de la decisión explícita; las de **D4–D6** son las del documento
-> que las fija, que es lo más preciso que tenemos.
-
-### Abiertas
-
-| # | Decisión | Estado | Quién la cierra |
-|---|---|---|---|
-| **D7** | **`VEREDICTO_NO_CONFIABLE`: ¿consume vida?** El estado existe en el runner (exit 30) pero no está en el contrato de `03` §5.1 ni acordado con T10 | Propuesta escrita en `06` §7. Falta verificar con un caso honesto que use `Runtime.exec` legítimamente | Nosotros + T10 |
-| **D8** | **`TIMEOUT`: ¿uno o dos en el contrato?** El runner distingue `TIMEOUT_CPU` de `TIMEOUT_PARED`; el contrato tiene uno solo | Propuesta en `06` §7: uno solo, con `subtipo` informativo | Nosotros |
-| **D10** | **Política de `stdout` en modo `COMPLETO`.** Canal de fuga: la salida de un test oculto se mezcla con la de los visibles | Abierto. Cambia la forma del reporte, conviene cerrarlo antes de congelar el contrato | Nosotros + T05 |
-| **D11** | **¿El sandbox filtra por visibilidad, o devuelve todo y filtra T05?** La investigación externa recomienda lo segundo | Tensión no resuelta, documentada en `03` §6 | Nosotros + T05 |
-| **D12** | **Paquete reservado de los tests.** Sin que T05 lo declare, no podemos rechazar una solución que lo usurpe | Abierto. Mitigado —no cerrado— por el orden del classpath | T05 |
-| **D13** | **¿Una versión publicada de un desafío es inmutable?** Bloquea el cacheo de la suite compilada | Abierto | T03 |
-| **D14** | **Unificar o separar formalmente los dos `07`** | Abierto | Nosotros |
-| **D15** | **¿1 CPU o 2 por contenedor?** `08` §4.1 fija `NanoCpus: 1000000000` (**1 CPU**); `03` §1.4a y §4.3 y `04` §11 dicen **2** | **Medido de nuevo el 4-sep-2026, ahora de punta a punta:** el mismo bundle tarda **8.4 s con 1 CPU** (compilación 5.1 s) contra **3.3 s con 2 CPU**. No rompe —los relojes de adentro son 20 s por compilación y 60 s de pared— pero se come la mitad del presupuesto sin necesidad. Cambiarlo rompe el golden test A1 a propósito | Nosotros |
-
-### Abiertas por el V4 del Grupo 5
-
-Las que dicen "Nosotros + T05" están planteadas en la respuesta que ya les mandamos y esperan
-contestación.
-
-| # | Decisión | Estado | Quién la cierra |
-|---|---|---|---|
-| **D17** | **¿Aceptamos la Opción 1 (catálogo de perfiles)?** Propuesta: sí, con perfiles **inmutables y versionados** (`POST` crea versión nueva, `PUT` se rechaza) y ciclo `BORRADOR → VALIDADA → ACTIVA → DEPRECADA` | Mandada en la respuesta §4.1. Espera confirmación | Nosotros + T05 |
-| **D18** | **¿Los límites viven en el perfil o en el request?** Propuesta: **en el perfil**, con presupuestos separados de compilación y evaluación, y el reloj del alumno medido en **tiempo de CPU**, no de pared | Mandada en la respuesta §4.3. Espera confirmación | Nosotros + T05 |
-| **D19** | **Bandas de códigos de salida:** `0` y `40–59` de ellos (su tabla), `20–31` nuestros, hueco `32–39`, cualquier otro es error de infraestructura | Mandada en la respuesta §2.3. Espera la tabla del `40–59` (**A3**) | Nosotros + T05 |
-| **D20** | **Modelo asincrónico.** El V4 no lo menciona. Propuesta: el resultado viaja como evento `EjecucionFinalizada` por el bus de la plataforma (Kafka, del grupo de notificaciones), con el **resumen y no el detalle**; el reporte completo se busca por `GET` | Mandada en la respuesta §6. **Pendiente de contexto:** `07` §3.4 tiene el relay publicando a **RabbitMQ**, que es nuestra cola interna (`04` §3). Cómo se articula con el bus de la plataforma se resuelve con el panorama completo de eventos, no acá | Nosotros + T05 |
-| **D21** | **Catálogo de imágenes base:** quién las nombra, quién las versiona, quién aprueba una nueva. Incluye si la base pasa a ser **Alpine** — nuestro entrypoint está en **bash** y el shell reducido de Alpine no lo corre tal cual | Abierta. No depende de G5 | Nosotros |
-
-### Preguntas abiertas del contrato
-
-Ninguna se resuelve rehaciendo código nuestro.
-
-| # | Pregunta | Quién la contesta |
-|---|---|---|
-| **A1** | ¿El límite de CPU es por proceso o agregado? | Nosotros, con un caso de prueba |
-| **A2** | ¿Cuánta CPU y memoria consumen realmente PMD y ArchUnit? | **El Grupo 5**, con mediciones |
-| **A3** | ¿Qué etiquetas de fase y qué códigos `40–59` definen? | El Grupo 5 |
-| **A4** | ¿Cuántos perfiles arrancamos, y con qué contenido? | Los dos |
-| **A5** | **¿El botón "Ejecutar" del IDE pasa por el sandbox?** (definición 8 del `03` §7) | T05. Sigue abierta, el V4 no la toca, y **cambia el dimensionamiento por completo** |
+**A1** (¿el límite de CPU es por proceso o agregado?) quedó cerrada: el ulimit `cpu` es **por
+proceso**, porque cada programa nuevo arranca su contador en cero. Es un freno contra un proceso
+desbocado en cada fase, no un presupuesto. El techo agregado real es el reloj de pared del ejecutor
+multiplicado por las CPU del perfil, y el presupuesto del alumno es el reloj de CPU de los tests. Ver
+`03-aislamiento.md` (relojes).
 
 ---
 
-## 4. Pendientes técnicos
+## 3. Abierto
 
-| # | Pendiente | Estado |
-|---|---|---|
-| P2 | Casos hostiles a nivel **tar**: enlaces simbólicos y duros | Abierto, y **subió de prioridad con el V4.** Necesitan un harness que fabrique el tar a mano, porque `run.sh` lo arma solo. Además hay que **reemplazar la lista blanca de rutas** (hoy sólo acepta lo que empiece con `src/` o `test/`) por prohibiciones sobre el **tipo** de entrada: con `run.sh` en la raíz y configuraciones de G5 en cualquier lado, esa lista no sobrevive, y mientras era angosta tapaba el hueco de los enlaces |
-| P3 | La **suite hostil corriendo en CI** | Abierto. La suite existe y pasa 9/9; falta el pipeline. **Sumar ahí `scripts/integracion-runner.mjs`**, que es lo que cierra P0 y lo mantiene cerrado |
-| P4 | Contrato **OpenAPI** y un stub para T05 | Abierto |
-| P5 | Cachear la suite de tests compilada por versión de desafío | Bloqueado por **D13** |
-| P6 | **R14.1** — revisión línea por línea de la implementación Java, por dos personas que no la escribieron | Pendiente de revisión humana |
-| **P8** | **Los bundles hostiles tienen rutas hardcodeadas.** Al mover el reporte a `/work`, `hostil-reporte` y `hostil-reporte-loop` siguieron apuntando a `/tmp/reports` y **el ataque se desarmó solo**: la suite daba verde sin probar nada. Corregido, pero el acoplamiento sigue | **Mitigado, no resuelto.** La ruta debería salir de una variable que el entrypoint exporte, o el test debería fallar si el ataque no llega a destino |
-
-### Cerrado
-
-| # | Pendiente | Cómo cerró |
-|---|---|---|
-| **P0** | **El ejecutor y la imagen del runner nunca se corrieron juntos** | **Cerrado.** El ejecutor Java corre contra la imagen real de dos capas; A39 verifica los nueve bundles de referencia sin divergencias |
-| **P1** | El entrypoint no implementaba el nonce de `08` §7 | **Cerrado.** Implementado y verificado: lee la primera línea de stdin en una variable no exportada y emite el reporte entre `---SANDBOX-<nonce>-INICIO/FIN---`. El `read` de bash no consume más allá del `
-`, que era lo que §7 pedía probar |
-| **P1b** | La spec montaba el tmpfs en `/work` y el entrypoint escribía en `/tmp` | **Cerrado a favor de la spec.** El entrypoint escribe todo bajo `/work`; `HOME` y `WORKDIR` acompañan |
-| **P7** | La implementación **Java** seguía con la spec vieja del tmpfs | **Cerrado.** Golden A1 regenerado y suite vigente de **122 tests en verde**; verificado además contra la imagen real |
-| **P9** | Refactor del entrypoint al modelo de dos capas | **Cerrado.** `capa1.sh` conserva el aislamiento y ejecuta la capa 2 del perfil; A39 verifica los nueve bundles contra Docker real |
-
-**Resuelto y sacado de la lista:** validar el paquete del alumno (queda contenido por el orden del
-classpath — sigue siendo deseable como defensa en profundidad, pero ya no es lo único que separa al
-veredicto de ser falso), los tres relojes y el ulimit `cpu` (fijados en `08` §4), y el bloqueo de
-`VERSION_API_DOCKER` (**D3**).
+| # | Pregunta | Quién la cierra | Qué bloquea |
+|---|---|---|---|
+| **D12** | Paquete reservado de los tests del profesor | T05 | El rechazo `RESERVED_PACKAGE` (HU-03) |
+| **D21** | Catálogo de imágenes base: quién las nombra, las versiona y aprueba una nueva, y si la base pasa a Alpine (el entrypoint es bash) | Nosotros | — |
+| **A2** | Memoria, CPU y timeouts de `java21-pmd` y `java21-checkstyle` | Nosotros, por medición | El cierre de HU-07 |
+| **A5** | ¿El botón "Ejecutar" del IDE pasa por el sandbox? | T05 | El dimensionamiento del pool |
+| **A6** | Autenticación servicio a servicio entre T05 y el sandbox a través del Gateway | T05 y la plataforma | El cierre de HU-01 y HU-04 |
+| **A7** | Formato final del bundle en el request y codificación de los archivos y de los reportes | T05 | HU-01 |
+| **A8** | Estabilidad de la clave `Idempotency-Key` entre reintentos | T05 | HU-02 |
+| **A9** | Nombre del topic de `ExecutionCompleted`, formato del sobre, autenticación, particiones y retención del bus | Grupo de notificaciones | El cierre de HU-10 |
+| **A10** | Componente que hace la validación estructural del bundle (tipos de entrada del tar) | Nosotros | `T-06-11` |
+| **A11** | Nombres físicos de la cola de trabajo, el exchange, la routing key y la DLQ | Nosotros | La declaración de la topología (HU-05) |
 
 ---
 
-## 5. Qué hay fuera de `docs/arquitectura/`
+## 4. Fuera del MVP
 
-| Ruta | Qué es |
+| Tema | Por qué queda afuera |
 |---|---|
-| `ms-sandbox/imagenes/` | Las imágenes de ejecución, alineadas con la spec `08` §4.1: `java21-junit/Dockerfile` (capa 1 + herramientas) y `capa1/capa1.sh` (el entrypoint, con el nonce de §7) — **9/9 casos hostiles contenidos** (ver `ms-sandbox/pruebas/`). El `Dockerfile`, `entrypoint.sh`, `run.sh`, `build.sh`, `suite-hostil.sh` y `ver-reporte.sh` de una sola capa se eliminaron del repo al pasar al modelo de dos capas; ver historial de git |
-| `ms-sandbox/perfiles/` | El catálogo de perfiles: `java21-junit@4.json` y el script de la capa 2 que referencia, `java21-junit.sh` |
-| `ms-sandbox/pruebas/` | El banco de pruebas: `bundles/` (los nueve casos, camino feliz y hostiles) y `probar-capa1.sh`, el arnés de dos capas |
-| `ms-sandbox/ejecutor/` | Implementación vigente del ejecutor en Java 21. **~1066 líneas** efectivas y **122 tests en verde**. Verificada contra Docker real por `npipe://` en Windows y `unix://` en Linux |
-| `historico/investigacion/hallazgos-investigacion-sandbox.md` | Investigación externa sobre el sandbox: CVEs de Judge0 y Ares, papers, fuentes. Lo que trajo está marcado **[IE]** en los documentos |
-| `historico/investigacion/respuesta-sidecar-ejecutor.md` | Respuesta a la investigación del **ejecutor**: el rediseño que elimina el `attach` hijacked, y tres correcciones al briefing |
-| `historico/investigacion/briefing-investigacion-*.md` | Los dos briefings autocontenidos que se llevaron a fuentes externas |
-| `historico/intercambios-g5/Contrato_Sandbox_Tema05.md` | **⚠ OBSOLETO.** El primer borrador del contrato con T05: Python 3.11, `source_code` único y `test_cases[]` con `expected_stdout`. Nada de eso sobrevive al V4. Sobrevive sólo el **modelo asincrónico** y la distinción `infra_error` vs. falla del alumno. Lo reemplaza `historico/intercambios-g5/Respuesta_G8_a_Propuesta_V4.md` §2 y §6 |
-| `historico/intercambios-g5/Respuesta_G8_a_Propuesta_V4.md` | **La respuesta que le mandamos al Grupo 5** el 7‑sep‑2026: aceptamos el modelo de dos capas y la Opción 1, y les pasamos la mitad del contrato del contenedor que no conocían (buzón de salida, códigos de salida, desvío de `stdout`, qué hace la capa 1 después). Tiene también su PDF |
-| `historico/intercambios-g5/Propuesta_Integracion_G5_G6_Entrypoint_V4.pdf` | Lo que mandó el Grupo 5 |
-| `historico/fuentes/` | Propuesta de la cátedra, láminas, y las versiones de los documentos previas a la investigación |
+| **Autenticidad de la salida cruda** (verificador de bytecode contra una lista blanca de APIs) | Es un desarrollo de varias semanas. **Deuda conocida:** el código del alumno corre en el mismo proceso que el runner de tests y puede fabricar su propio reporte o leer los tests ocultos. El MVP sirve para una demo, no para calificar a un alumno adversarial. Ver `03` |
+| **Filtrado de tests por visibilidad** (antes **D10** y **D11**) | Falta que T05 defina si filtra el sandbox o filtra T05 sobre la respuesta completa |
+| **Cacheo de la suite compilada** (antes **D13** y **P5**) | Depende de que T03 defina si una versión publicada de un desafío es inmutable |
+| **CRUD de perfiles y catálogo dinámico** | El MVP usa el catálogo estático de **D17** |
+| **Circuit Breaker del worker hacia el ejecutor** | Está diseñado, pero ninguna historia del MVP lo incluye. Ver `07-patrones.md` (Circuit Breaker) |
 
-> **Cómo se prueba en Windows.** `docker-java` usa el *named pipe* de Docker Desktop mediante
-> `npipe://`; en Linux usa el socket local mediante `unix://`. TCP está prohibido en producción.
+---
+
+## 5. Pendientes técnicos
+
+| # | Pendiente | Dónde se resuelve |
+|---|---|---|
+| **P2** | Casos hostiles a nivel tar (enlaces simbólicos y duros, FIFOs, dispositivos): la validación pasa a una lista blanca de **tipos** de entrada | HU-06 |
+| **P3** | Suite hostil y pruebas contra Docker real en CI | Tareas de entorno y CI de HU-01 |
