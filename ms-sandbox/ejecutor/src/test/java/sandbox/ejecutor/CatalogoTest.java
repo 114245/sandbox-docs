@@ -362,4 +362,18 @@ class CatalogoTest {
             throw new IllegalStateException("SHA-256 no disponible", e);
         }
     }
+
+    /** F-16: la regla de la clave vive en Catalogo y la comparten Servidor y SincroniaPerfiles. */
+    @Test
+    void esClaveValidaAceptaSoloIdEnMinusculaArrobaVersion() {
+        assertTrue(Catalogo.esClaveValida("java21-junit@4"));
+        assertTrue(Catalogo.esClaveValida("a@0"));
+        assertFalse(Catalogo.esClaveValida(null));
+        assertFalse(Catalogo.esClaveValida(""));
+        assertFalse(Catalogo.esClaveValida("Java21@4"));
+        assertFalse(Catalogo.esClaveValida("no-tiene-arroba"));
+        assertFalse(Catalogo.esClaveValida("java21-junit@"));
+        assertFalse(Catalogo.esClaveValida("java21_junit@4"));
+        assertFalse(Catalogo.esClaveValida("java21-junit@4\n"));
+    }
 }

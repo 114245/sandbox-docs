@@ -1,0 +1,11 @@
+{
+  "perfilId": "backstop-peor-caso",
+  "version": 1,
+  "imagen": "sandbox-runner:2.0.0-capa1",
+  "script": "#!/bin/sh\n#\n# backstop-peor-caso@1 -- guion de juguete de BundlesIT.plataformaPeorCaso (F-16).\n#\n# Ignora SIGTERM y no termina nunca: obliga a la capa 1 a agotar el backstop\n# (SANDBOX_EVAL_TIMEOUT_S) Y la gracia de `timeout -k` hasta el SIGKILL. Duerme\n# en vez de quemar CPU para que no lo corte antes el limite de CPU del perfil.\n# `trap '' TERM` se hereda: los `sleep` hijos tambien ignoran SIGTERM.\ntrap '' TERM\nwhile :; do sleep 1; done\n",
+  "reportFormat": "texto-libre",
+  "limites": {
+    "memoriaMb": 256,
+    "cpuS": 10
+  }
+}

@@ -12,6 +12,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * El catalogo de perfiles (Paso 1 de la Opcion 1 del handoff). Directorio read-only, un archivo
@@ -26,6 +27,17 @@ import java.util.Map;
 final class Catalogo {
 
     private final Map<String, Perfil> perfiles;
+
+    /**
+     * Formato de la clave de un perfil: {@code <perfilId>@<version>}. Es a la vez el nombre de su
+     * archivo sin {@code .json} y el valor exacto del header X-Perfil. Vive aca porque
+     * {@link Perfil#clave()} es quien la arma.
+     */
+    private static final Pattern CLAVE = Pattern.compile("^[a-z0-9-]+@[0-9]+$");
+
+    static boolean esClaveValida(String clave) {
+        return clave != null && CLAVE.matcher(clave).matches();
+    }
 
     private Catalogo(Map<String, Perfil> perfiles) {
         this.perfiles = perfiles;
