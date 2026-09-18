@@ -8,11 +8,6 @@ historia, nunca como ítem independiente ni como parte de una épica técnica ap
 módulos del servicio (`api`, `worker`, `ejecutor`) se construyen desde cero; por eso la primera
 tarea de las historias que dan origen a un módulo es crear ese módulo.
 
-Estas tareas se cargan en Taiga recién después de haber actualizado la descripción, las notas,
-los criterios de aceptación y la estimación de las nueve historias (ver la sección
-"Pasos a aplicar" de `Epicas_Historias_Usuario_Sandbox_Tema06.md`), para que no queden asociadas
-a contenido que todavía va a cambiar.
-
 ---
 
 ## Resumen
@@ -26,9 +21,10 @@ a contenido que todavía va a cambiar.
 | HU-05 — Que la entrega se evalúe aunque haya un pico o se reinicie un servicio | Épica 2 | 19 |
 | HU-06 — Que el código del alumno no pueda llegar a la red, al host ni a otros servicios | Épica 3 | 14 |
 | HU-07 — Que cada ejecución respete los límites de CPU, memoria y tiempo del perfil | Épica 3 | 19 |
-| HU-08 — Capturar y devolver la salida cruda del programa y el reporte de la herramienta | Épica 3 | 8 |
+| HU-08 — Capturar y devolver la salida cruda del programa y el reporte de la herramienta | Épica 3 | 9 |
 | HU-09 — Un chequeo de salud que distinga "saturado" de "roto" | Épica 3 | 8 |
-| **Total** | | **103** |
+| HU-10 — Recibir un aviso cuando termina una ejecución | Épica 1 | 8 |
+| **Total** | | **112** |
 
 ---
 
@@ -152,6 +148,7 @@ a contenido que todavía va a cambiar.
 - `T-08-06` Exponer en el resultado la salida cruda (salida estándar y de error) y el/los archivo(s) de reporte de la herramienta del perfil, tal como los produjo, sin interpretarlos. (CA1, CA4)
 - `T-08-07` Armar los bundles de prueba de salida anticipada con código cero, de reporte falsificado y de bomba de desempaquetado, para verificar que el sandbox los devuelve crudos sin clasificarlos.
 - `T-08-08` Comunicar por escrito al equipo y a la cátedra que la salida cruda puede ser falsificada por el código del alumno y que T05 no debe tratarla todavía como una calificación auténtica.
+- `T-08-09` Agregar la columna del código de salida de la herramienta a la tabla de ejecuciones e incluirlo en el resultado crudo, sin interpretarlo, con su prueba. (CA1)
 
 ### HU-09 — Un chequeo de salud que distinga "saturado" de "roto" (Épica 3, Could)
 
@@ -164,6 +161,17 @@ a contenido que todavía va a cambiar.
 - `T-09-07` Escribir una prueba por cada situación de la tabla de comportamiento de la historia.
 - `T-09-08` Implementar la ejecución canaria periódica que alimenta el chequeo de salud. (extra)
 
+### HU-10 — Recibir un aviso cuando termina una ejecución (Épica 1)
+
+- `T-10-01` Definir el contrato del evento `ExecutionCompleted` (campos, clave y versión) y acordarlo con el grupo de notificaciones y con T05. (CA1, CA2)
+- `T-10-02` Ampliar el usuario de base de datos del worker creado en `T-05-15` con permiso de inserción sobre la tabla de outbox.
+- `T-10-03` Insertar el evento en la tabla de outbox en la misma transacción en la que se persiste el estado terminal (`T-05-17`), solo cuando la actualización condicional modificó la ejecución. (CA3, CA5)
+- `T-10-04` Emitir el evento también al marcar `INTERNAL_ERROR` por la cola de mensajes fallidos (`T-05-10`) y por el watchdog (`T-05-12`). (CA6)
+- `T-10-05` Enrutar en el proceso relay por tipo de mensaje: el trabajo a la cola interna y `ExecutionCompleted` al topic del bus de eventos, con `executionId` como clave. (CA1, CA4)
+- `T-10-06` Configurar el productor del bus de eventos (conexión, autenticación y topic) por configuración, sin valores fijos en el código.
+- `T-10-07` Escribir las pruebas de los tres escenarios de la historia y del evento emitido por la cola de mensajes fallidos y por el watchdog.
+- `T-10-08` Documentar el evento `ExecutionCompleted` en la especificación de la API.
+
 ---
 
 ## Definiciones que bloquean tareas
@@ -173,6 +181,7 @@ a contenido que todavía va a cambiar.
 - **Contrato del request del bundle (formato y identificador de perfil), a confirmar con T05** — condiciona HU-01.
 - **Estabilidad de la clave natural de idempotencia entre reintentos, a garantizar por T05** — condiciona HU-02.
 - **Componente donde vive la validación estructural del bundle** — decisión interna, `T-06-11`.
+- **Definiciones pendientes con el grupo de notificaciones (nombre del topic, formato del sobre, autenticación, particiones y retención del bus de eventos de la plataforma)** — condiciona HU-10.
 
 ---
 
@@ -198,3 +207,7 @@ estructural del bundle (HU-06) antes que los relojes y los estados técnicos de 
 HU-07 construye su imagen de ejecución sobre el mismo contenedor cuya especificación fija define
 HU-06. HU-08 depende a su vez de que la imagen de HU-07 ya tenga su primera capa (compilación y
 ejecución) para poder agregar la segunda capa de evaluación y reportes.
+
+HU-10 depende del outbox y del proceso relay que construye HU-01, y de que HU-05 ya persista el
+estado terminal de la ejecución, sobre el que se inserta el evento de finalización; conviene
+encararla una vez que esas dos historias estén resueltas.
