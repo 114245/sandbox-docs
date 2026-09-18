@@ -31,9 +31,8 @@
 > **Aviso:** la primera pasada de esta guía ya fue aplicada en Taiga. Los 12 ítems (las tres
 > épicas y las nueve historias de este documento) ya existen como ítems propios, con sus IDs y
 > títulos nuevos. Esta segunda pasada **no crea ningún ítem**: solo actualiza contenido en los 12
-> ítems existentes y agrega las tareas de `mvp-tareas.md`. **No hay que volver a usar la guía de
-> la primera pasada** (conservada como historial más abajo): indexa por títulos de Taiga que ya no
-> existen, y seguirla ahora duplicaría ítems.
+> ítems existentes y agrega las tareas de `mvp-tareas.md`. La guía de la primera pasada se eliminó:
+> indexaba por títulos de Taiga que ya no existen, y seguirla ahora duplicaría ítems.
 
 ### Épicas de la segunda pasada
 
@@ -69,42 +68,6 @@ se aplicó en la primera pasada).
 2. Actualizar la estimación agregada de las tres épicas.
 3. Editar las nueve historias: descripción, notas, criterios de aceptación y estimación nueva.
 4. Cargar las tareas de cada historia (ver `mvp-tareas.md`).
-
-### Historial: primera pasada (ya aplicada)
-
-Esta subsección se conserva solo para trazar qué ítem de Taiga era originalmente cuál. **No debe
-volver a ejecutarse**: ya fue aplicada, los ítems nuevos ya existen y repetirla duplicaría ítems.
-La numeración intermedia que usó esta primera pasada (que llegaba hasta el número 17) quedó descartada
-en favor de la numeración final 01–09 de las nueve historias del MVP; la columna "Nuevo ID y
-título" de la tabla siguiente ya está expresada con esos IDs finales, que son los que hoy tiene
-Taiga.
-
-Este documento reemplazó el contenido de las épicas e historias de usuario que el equipo ya
-había cargado en Taiga para el Tema 06. Los títulos que entonces eran actuales en Taiga se citan
-textuales para encontrar cada ítem; los códigos que contienen (por ejemplo D16 o P1) quedaron
-solo en esos títulos viejos, ya reemplazados.
-
-**Épicas — mapeo original (ya aplicado):**
-
-| Ítem que era actual en Taiga | Acción aplicada | Nuevo título |
-|---|---|---|
-| ÉPICA G01: "Ingesta Asíncrona Confiable y Catálogo Versionado de Perfiles" | Actualizado | Épica 1: Recepción de ejecuciones (API) |
-| ÉPICA G02: "Orquestación Aislada de Contenedores Efímeros mediante Worker y Sidecar Ejecutor" | Actualizado | Épica 3: Ejecución aislada |
-| — | Creado | Épica 2: Procesamiento asíncrono (cola y worker) |
-
-**Historias de usuario — mapeo original (ya aplicado):**
-
-| Ítem que era actual en Taiga | Acción aplicada | Nuevo ID y título | Épica destino | Cambió de épica |
-|---|---|---|---|---|
-| HU01: "Registro y administración de perfiles inmutables y versionados (Catálogo)" | Actualizado | HU-02 — Reintentar un envío sin que se ejecute dos veces | Épica 1 | No |
-| HU02: "Ingesta asíncrona de solicitudes de ejecución con patrón Transactional Outbox" | Actualizado | HU-01 — Enviar una entrega y recibir confirmación inmediata | Épica 1 | No |
-| HU03: "Despacho asíncrono de eventos EjecucionFinalizada vía Kafka y auditoría de artefactos" | Actualizado | HU-04 — Consultar el estado y el resultado de una ejecución | Épica 1 | No |
-| HU04: "Comunicación Worker-Ejecutor por Socket Unix con inyección por stdin (Framing de 3 documentos)" | Actualizado | HU-05 — Que la entrega se evalúe aunque haya un pico de envíos o se reinicie un servicio | Épica 2 | **Sí** — movió de ÉPICA G02 a Épica 2 |
-| HU05: "Ejecución estanca en contenedor efímero vía Sidecar Ejecutor (Hardening P1 y Destrucción Garantizada)" | Actualizado | HU-06 — Que el código del alumno no pueda llegar a la red, al host ni a otros servicios | Épica 3 | No |
-| HU06: "Verificación de evidencia de ejecución (D16) y sanitización de reportes desde /work/reports" | Actualizado | HU-08 — Ver la salida de mi programa y el resultado de los tests | Épica 3 | No |
-| — | Creado | HU-03 — Recibir errores claros y estables ante una entrega inválida | Épica 1 | — |
-| — | Creado | HU-07 — Que cada ejecución respete los límites de CPU, memoria y tiempo del perfil | Épica 3 | — |
-| — | Creado | HU-09 — Un chequeo de salud que distinga "saturado" de "roto" (opcional, prioridad Could) | Épica 3 | — |
 
 ### Fuera del MVP (para no perder información)
 
